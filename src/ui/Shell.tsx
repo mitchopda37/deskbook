@@ -214,11 +214,9 @@ export function Shell({ children }: { children: ReactNode }) {
               <button onClick={toggle} className="flex h-12 w-full items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold">
                 {theme === 'dark' ? <Sun size={22} /> : <Moon size={22} />}Switch to {theme === 'dark' ? 'light' : 'dark'} theme
               </button>
-              {!isDemo && (
-                <button onClick={signOut} className="flex h-12 w-full items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold text-late">
-                  <SignOut size={22} />Sign out
-                </button>
-              )}
+              <button onClick={signOut} className="flex h-12 w-full items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold text-late">
+                <SignOut size={22} />Sign out
+              </button>
             </div>
           </div>
         </div>
@@ -249,9 +247,9 @@ function UserMenu({ name, role, slim, theme, toggle, signOut }: {
   const ref = useRef<HTMLDivElement>(null)
   useDismiss(ref, shown, () => setShown(false))
   return (
-    <div ref={ref} className="relative border-t border-rail-line p-2">
+    <div ref={ref} className={`relative flex gap-1 border-t border-rail-line p-2 ${slim ? 'flex-col items-center' : 'items-center'}`}>
       <button onClick={() => setShown(!shown)} aria-expanded={shown} aria-haspopup="menu" title={slim ? name : undefined}
-        className={`flex w-full items-center gap-2.5 rounded-[0.55rem] p-1.5 text-left hover:bg-white/8 ${slim ? 'justify-center' : ''}`}>
+        className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-[0.55rem] p-1.5 text-left hover:bg-white/8 ${slim ? 'justify-center' : ''}`}>
         <Avatar name={name} size={32} />
         {!slim && (
           <>
@@ -263,6 +261,10 @@ function UserMenu({ name, role, slim, theme, toggle, signOut }: {
           </>
         )}
       </button>
+      <button onClick={signOut} aria-label="Sign out" title="Sign out"
+        className="grid size-9 shrink-0 place-items-center rounded-[0.55rem] text-rail-ink hover:bg-white/10 hover:text-white">
+        <SignOut size={18} />
+      </button>
       {shown && (
         <div role="menu" className="pop absolute bottom-full left-2 z-40 mb-1.5 w-56 rounded-[0.75rem] border border-line bg-surface p-1.5 text-ink shadow-[0_14px_40px_rgb(8_13_30/0.25)]">
           <button role="menuitem" onClick={() => { toggle(); setShown(false) }} className="flex h-9.5 w-full items-center gap-2.5 rounded-[0.5rem] px-2.5 font-medium hover:bg-sunk">
@@ -271,11 +273,9 @@ function UserMenu({ name, role, slim, theme, toggle, signOut }: {
           <NavLink role="menuitem" to="/settings" onClick={() => setShown(false)} className="flex h-9.5 items-center gap-2.5 rounded-[0.5rem] px-2.5 font-medium hover:bg-sunk">
             <GearSix size={18} />Settings
           </NavLink>
-          {!isDemo && (
-            <button role="menuitem" onClick={signOut} className="flex h-9.5 w-full items-center gap-2.5 rounded-[0.5rem] px-2.5 font-medium text-late hover:bg-sunk">
-              <SignOut size={18} />Sign out
-            </button>
-          )}
+          <button role="menuitem" onClick={signOut} className="flex h-9.5 w-full items-center gap-2.5 rounded-[0.5rem] px-2.5 font-medium text-late hover:bg-sunk">
+            <SignOut size={18} />Sign out
+          </button>
         </div>
       )}
     </div>

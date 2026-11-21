@@ -99,7 +99,7 @@ export default function Settings() {
             <button className="btn" onClick={toggle}>
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}Switch to {theme === 'dark' ? 'light' : 'dark'} theme
             </button>
-            {!isDemo && <button className="btn" onClick={signOut}><SignOut size={16} />Sign out</button>}
+            <button className="btn" onClick={signOut}><SignOut size={16} />Sign out</button>
           </div>
         </div>
       </div>
