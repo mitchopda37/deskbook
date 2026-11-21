@@ -45,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const { data: invite } = await admin
     .from('invitations')
-    .select('id, email, status, expires_at')
+    .select('id, email, role, workspace_id, status, expires_at')
     .eq('token', token)
     .maybeSingle()
   if (!invite || invite.status !== 'pending' || new Date(invite.expires_at).getTime() <= Date.now()) {
@@ -53,9 +53,39 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const email = String(invite.email).trim().toLowerCase()
+  const { data: info, error: lookupError } = await admin.rpc('invite_lookup', { p_token: token })
+  // Never fall through on a failed lookup: that path can set a password on an existing account.
+  if (lookupError || info?.status !== 'ok' || !('unfinished_account' in info)) {
+    return json(500, { error: 'The database needs the latest update. Ask the admin to run supabase/schema.sql again.' })
+  }
+  if (info.has_account) {
+    return json(409, { code: 'has_account', error: 'You already have an account. Sign in with your password to join this workspace.' })
+  }
+
   const { data: existing } = await admin.from('profiles').select('id').eq('email', email).maybeSingle()
   if (existing) {
-    return json(409, { code: 'has_account', error: 'You already have an account. Sign in with your password to join this workspace.' })
+    // A half-made account (an old emailed invite or an unconfirmed sign-up): nobody can sign in to it,
+    // so this link finishes it. Claim the link first so two tabs cannot both use it.
+    const { data: claimed } = await admin
+      .from('invitations').update({ status: 'accepted' })
+      .eq('id', invite.id).eq('status', 'pending').select('id')
+    if (!claimed?.length) return json(410, { error: GONE })
+    const release = () => admin.from('invitations').update({ status: 'pending' }).eq('id', invite.id)
+
+    const { error: updateError } = await admin.auth.admin.updateUserById(existing.id, {
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: name },
+    })
+    if (updateError) { await release(); return json(400, { error: updateError.message }) }
+
+    const { error: memberError } = await admin
+      .from('workspace_members')
+      .upsert({ workspace_id: invite.workspace_id, user_id: existing.id, role: invite.role }, { onConflict: 'workspace_id,user_id', ignoreDuplicates: true })
+    if (memberError) { await release(); return json(500, { error: `Could not add you to the workspace: ${memberError.message}` }) }
+
+    await admin.from('profiles').update({ full_name: name }).eq('id', existing.id)
+    return json(200, { email })
   }
 
   const { error } = await admin.auth.admin.createUser({

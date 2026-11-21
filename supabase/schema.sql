@@ -685,18 +685,26 @@ as $$
 declare
   invite public.invitations%rowtype;
   ws public.workspaces%rowtype;
+  usable boolean;
 begin
   select * into invite from public.invitations where token = coalesce(p_token, '');
   if invite.id is null or invite.status = 'revoked' then return jsonb_build_object('status', 'invalid'); end if;
   if invite.status = 'accepted' then return jsonb_build_object('status', 'used'); end if;
   if invite.expires_at <= now() then return jsonb_build_object('status', 'expired'); end if;
   select * into ws from public.workspaces where id = invite.workspace_id;
+  -- An account only counts if someone can sign in to it: confirmed and with a password.
+  -- Accounts left half-made by an emailed invite or an unconfirmed sign-up have neither, so the
+  -- link lets that person choose a password instead of asking for one nobody knows.
+  select bool_or(u.email_confirmed_at is not null and coalesce(u.encrypted_password, '') <> '')
+    into usable
+    from auth.users u where lower(u.email) = lower(invite.email);
   return jsonb_build_object(
     'status', 'ok',
     'email', lower(invite.email),
     'role', invite.role,
     'workspace', coalesce(nullif(ws.brand_name, ''), ws.name, 'Deskbook'),
-    'has_account', exists (select 1 from public.profiles p where lower(p.email) = lower(invite.email))
+    'has_account', coalesce(usable, false),
+    'unfinished_account', usable is not null and not usable
   );
 end $$;
 
@@ -725,7 +733,7 @@ begin
 end $$;
 
 revoke all on function public.invite_lookup(text) from public;
-grant execute on function public.invite_lookup(text) to anon, authenticated;
+grant execute on function public.invite_lookup(text) to anon, authenticated, service_role;
 revoke all on function public.accept_invitation(text) from public;
 grant execute on function public.accept_invitation(text) to authenticated;
 

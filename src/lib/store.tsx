@@ -142,7 +142,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setJoining(true)
         try {
           const { error } = await sb.auth.signInWithPassword({ email, password })
-          if (error) throw new Error(error.message)
+          if (error) {
+            throw new Error(/invalid login credentials/i.test(error.message)
+              ? `That is not the password for ${email}. Use the password you sign in to Deskbook with, or press "Forgot your password?".`
+              : error.message)
+          }
           const { data: workspaceId, error: acceptError } = await sb.rpc('accept_invitation', { p_token: token })
           if (acceptError) {
             await sb.auth.signOut()
