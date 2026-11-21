@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { arrivedFromInvite, backend, isDemo, supabase } from './backend'
+import { arrivedFromInvite, backend, createInvitedAccount, isDemo, supabase } from './backend'
 import { DEMO_USER } from './demo'
 import { daysBetween, monthKey, today } from './dates'
 import type { Bill, Client, Data, Invoice, Payment, Profile, Received, Table } from './types'
@@ -21,6 +21,10 @@ interface AuthState {
   /** True after the person opens an emailed invitation and has not chosen a name and password yet. */
   welcoming: boolean
   finishWelcome(name: string, password: string): Promise<void>
+  /** Uses a one-time invite link: creates the account (or signs in an existing one) and joins the workspace. */
+  acceptInvite(input: { token: string; email: string; name: string; password: string; hasAccount: boolean }): Promise<void>
+  /** True while a sign-in from an invite link is still adding the new workspace. */
+  joining: boolean
 }
 const AuthCtx = createContext<AuthState>(null!)
 export const useAuth = () => useContext(AuthCtx)
@@ -34,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const [recovering, setRecovering] = useState(false)
   const [welcoming, setWelcoming] = useState(!isDemo && arrivedFromInvite)
+  const [joining, setJoining] = useState(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -107,8 +112,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setWelcoming(false)
         await qc.invalidateQueries({ queryKey: ['data'] })
       },
+      joining,
+      async acceptInvite({ token, email, name, password, hasAccount }) {
+        const clearLink = () => window.history.replaceState(null, '', window.location.pathname)
+        if (isDemo) {
+          sessionStorage.setItem('deskbook-demo-session', 'active')
+          clearLink()
+          setUser({ id: DEMO_USER, email: 'demo@deskbook.app' })
+          return
+        }
+        const sb = supabase!
+        if (!hasAccount) {
+          const created = await createInvitedAccount(token, name, password)
+          if (!created.ok && !created.unavailable) throw new Error(created.reason)
+          if (!created.ok) {
+            // No server function (local dev): plain sign-up. Works when "Confirm email" is off in Supabase.
+            const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name, invite_token: token } } })
+            if (error) throw new Error(error.message)
+            if (!data.session) throw new Error('Your account was created but Supabase wants an email confirmation. Ask the admin to turn off "Confirm email" in Supabase, or to add SUPABASE_SERVICE_ROLE_KEY on Vercel.')
+            clearLink()
+            return
+          }
+          clearLink()
+          const { error } = await sb.auth.signInWithPassword({ email, password })
+          if (error) throw new Error(error.message)
+          return
+        }
+        // Existing account: hold the app on the splash until the new workspace is added.
+        setJoining(true)
+        try {
+          const { error } = await sb.auth.signInWithPassword({ email, password })
+          if (error) throw new Error(error.message)
+          const { data: workspaceId, error: acceptError } = await sb.rpc('accept_invitation', { p_token: token })
+          if (acceptError) {
+            await sb.auth.signOut()
+            throw new Error(acceptError.message)
+          }
+          if (workspaceId) switchWorkspace(String(workspaceId))
+          clearLink()
+          await qc.invalidateQueries({ queryKey: ['data'] })
+        } finally {
+          setJoining(false)
+        }
+      },
     }),
-    [loading, user, qc, recovering, welcoming],
+    [loading, user, qc, recovering, welcoming, joining],
   )
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
@@ -354,11 +402,31 @@ export type Sheet =
   | { kind: 'payment'; invoiceId: string }
   | { kind: 'followup'; id?: string; clientId?: string; invoiceId?: string; about?: string }
 
-const SheetCtx = createContext<{ sheet: Sheet | null; open(s: Sheet): void; close(): void }>(null!)
+const SheetCtx = createContext<{ sheet: Sheet | null; leaving: boolean; open(s: Sheet): void; close(): void }>(null!)
 export const useSheet = () => useContext(SheetCtx)
+
+/** How long a closing drawer animates out before it unmounts. Matches .sheet-out in index.css. */
+const SHEET_EXIT_MS = 180
 
 export function SheetProvider({ children }: { children: ReactNode }) {
   const [sheet, setSheet] = useState<Sheet | null>(null)
-  const value = useMemo(() => ({ sheet, open: setSheet, close: () => setSheet(null) }), [sheet])
+  const [leaving, setLeaving] = useState(false)
+  const timer = useRef(0)
+  const value = useMemo(() => ({
+    sheet,
+    leaving,
+    open(s: Sheet) {
+      window.clearTimeout(timer.current)
+      setLeaving(false)
+      setSheet(s)
+    },
+    close() {
+      if (!sheet || leaving) return
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setSheet(null); return }
+      setLeaving(true)
+      timer.current = window.setTimeout(() => { setSheet(null); setLeaving(false) }, SHEET_EXIT_MS)
+    },
+  }), [sheet, leaving])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
   return <SheetCtx.Provider value={value}>{children}</SheetCtx.Provider>
 }

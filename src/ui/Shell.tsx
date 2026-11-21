@@ -16,7 +16,11 @@ export function useTheme() {
   const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'light')
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = next
+    // Cross-fade colours for a moment so the switch does not flash.
+    const html = document.documentElement
+    html.classList.add('theme-fade')
+    window.setTimeout(() => html.classList.remove('theme-fade'), 320)
+    html.dataset.theme = next
     try { localStorage.setItem('deskbook-theme', next) } catch { /* storage blocked: applies for this visit only */ }
     setTheme(next)
   }
@@ -85,6 +89,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const rest = all.filter((n) => !tabPaths.includes(n.to))
   const restActive = rest.some((n) => pathname.startsWith(n.to))
   const myName = me?.full_name || me?.email || 'You'
+  const roleLabel = isPlatformOwner ? 'Admin' : isOwner ? 'Sub admin' : 'Team member'
 
   return (
     <div className="min-h-dvh transition-[padding] duration-200 md:pl-(--rail) print:pl-0!" style={{ '--rail': slim ? '72px' : '252px', '--workspace-accent': activeWorkspace?.accent_color ?? '#3159c9', '--workspace-accent-ink': readableInk(activeWorkspace?.accent_color ?? '#3159c9') } as React.CSSProperties}>
@@ -124,7 +129,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 {g.items.map((n) => (
                   <NavLink key={n.to} to={n.to} end={n.to === '/'} title={slim ? n.label : undefined}
                     className={({ isActive }) =>
-                      `relative flex h-9.5 items-center rounded-[0.55rem] font-medium ${slim ? 'justify-center' : 'gap-3 px-3'} ${
+                      `relative flex h-9.5 items-center rounded-[0.55rem] font-medium transition-colors duration-150 ${slim ? 'justify-center' : 'gap-3 px-3'} ${
                         isActive ? 'bg-white/12 text-white' : 'hover:bg-white/6 hover:text-white'
                       }`}>
                     {({ isActive }) => (
@@ -143,7 +148,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <UserMenu name={myName} role={isOwner ? 'Owner' : 'Team member'} slim={slim} theme={theme} toggle={toggle} signOut={signOut} />
+        <UserMenu name={myName} role={roleLabel} slim={slim} theme={theme} toggle={toggle} signOut={signOut} />
       </aside>
 
       {/* ---------- phone top bar ---------- */}
@@ -160,14 +165,17 @@ export function Shell({ children }: { children: ReactNode }) {
         </p>
       )}
 
-      <main id="main-content" className="mx-auto max-w-[1380px] px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-16 xl:px-11 print:max-w-none print:p-0">{children}</main>
+      <main id="main-content" className="mx-auto max-w-[1380px] px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-16 xl:px-11 print:max-w-none print:p-0">
+        {/* Keyed by path so each view eases in instead of popping. */}
+        <div key={pathname} className="page-enter">{children}</div>
+      </main>
 
       {/* ---------- phone tab bar ---------- */}
       <nav aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden print:hidden">
         {tabs.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'}
-            className={({ isActive }) => `relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.72rem] font-semibold ${isActive ? 'text-ink' : 'text-mute'}`}>
+            className={({ isActive }) => `relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.72rem] font-semibold transition-colors duration-150 ${isActive ? 'text-ink' : 'text-mute'}`}>
             {({ isActive }) => (
               <>
                 {isActive && <span className="absolute top-0 h-[3px] w-8 rounded-b bg-ink" />}
@@ -200,13 +208,13 @@ export function Shell({ children }: { children: ReactNode }) {
               <Avatar name={myName} size={38} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{myName}</p>
-                <p className="text-[0.87rem] text-mute">{isOwner ? 'Owner' : 'Team member'}</p>
+                <p className="text-[0.87rem] text-mute">{roleLabel}</p>
               </div>
               <button className="btn btn-quiet btn-icon" aria-label="Close" onClick={() => setMore(false)}><X size={20} /></button>
             </div>
             <div className="border-t border-line pt-1.5">
               {rest.map((n) => (
-                <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex h-12 items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold ${isActive ? 'bg-sunk' : ''}`}>
+                <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex h-12 items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold transition-colors duration-150 ${isActive ? 'bg-sunk' : ''}`}>
                   <n.icon size={22} /><span className="flex-1">{n.label}</span>
                   {!!n.count && <span className="min-w-5 rounded-full bg-gold px-1.5 text-center text-[0.8rem] leading-5 text-gold-ink">{n.count}</span>}
                 </NavLink>

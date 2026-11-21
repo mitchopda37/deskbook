@@ -110,18 +110,18 @@ export function AnimatedNumber({ value, format = (n) => Math.round(n).toLocaleSt
 }
 
 export function Drawer({
-  title, onClose, children, footer,
-}: { title: string; onClose(): void; children: ReactNode; footer?: ReactNode }) {
+  title, onClose, children, footer, leaving = false,
+}: { title: string; onClose(): void; children: ReactNode; footer?: ReactNode; leaving?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="scrim absolute inset-0 bg-[rgb(8_13_30/0.45)]" onClick={onClose} />
+    <div className={`fixed inset-0 z-40 flex justify-end ${leaving ? 'pointer-events-none' : ''}`}>
+      <div className={`${leaving ? 'scrim-out' : 'scrim'} absolute inset-0 bg-[rgb(8_13_30/0.45)]`} onClick={onClose} />
       <aside role="dialog" aria-modal="true" aria-label={title}
-        className="sheet relative flex h-full w-full max-w-[460px] flex-col bg-surface shadow-[-12px_0_40px_rgb(8_13_30/0.18)]">
+        className={`${leaving ? 'sheet-out' : 'sheet'} relative flex h-full w-full max-w-[460px] flex-col bg-surface shadow-[-12px_0_40px_rgb(8_13_30/0.18)]`}>
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h2 className="text-xl font-semibold">{title}</h2>
           <button className="btn btn-quiet btn-icon" onClick={onClose} aria-label="Close"><X size={18} /></button>

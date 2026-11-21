@@ -21,7 +21,7 @@ Without Supabase keys the app shows its secure login and uses sample data after 
 1. Create a project at supabase.com.
 2. Open **SQL Editor > New query**, paste all of `supabase/schema.sql`, press **Run**.
 3. Open **Project Settings > API** and copy the **Project URL** and the **anon public** key.
-4. Optional, for a faster first login: **Authentication > Sign In / Providers > Email**, turn off "Confirm email". Leave it on if you want every team member to verify their address.
+4. Optional: **Authentication > Sign In / Providers > Email**, turn off "Confirm email". Invite links do not need email at all when `SUPABASE_SERVICE_ROLE_KEY` is set on Vercel (below); turning this off is only needed if you test invite links with `npm run dev` against a real project.
 
 ### 2. Vercel
 
@@ -30,19 +30,13 @@ Without Supabase keys the app shows its secure login and uses sample data after 
 3. Add three environment variables (**Settings > Environment Variables**, tick Production and Preview):
    - `VITE_SUPABASE_URL` = your Project URL
    - `VITE_SUPABASE_ANON_KEY` = your anon public key
-   - `SUPABASE_SERVICE_ROLE_KEY` = the **service_role** key from the same Supabase page. It is used only by `api/invite.ts` on the server to send invitation emails. Never give it a `VITE_` prefix and never put it in the frontend; anything with `VITE_` is visible to every visitor.
-   - Optional: `SITE_URL` = your custom domain (for example `https://app.yourstudio.com`) if invitation links should always point there.
+   - `SUPABASE_SERVICE_ROLE_KEY` = the **service_role** key from the same Supabase page. It is used only by the server functions in `api/`: `accept-invite.ts` creates the account when someone opens an invite link and sets a password. Without it, invite links cannot finish creating accounts. Never give it a `VITE_` prefix and never put it in the frontend; anything with `VITE_` is visible to every visitor.
 4. Deploy. `vercel.json` already sets the build, the page routing, the `/api` function and security headers.
 5. Back in Supabase: **Authentication > URL Configuration**, set **Site URL** to your Vercel address and add `https://your-app.vercel.app/**` under **Redirect URLs** (and your custom domain the same way). Invitation and password-reset links only return to addresses on this list.
 
-### 4. Email (invitations and password resets)
+### 4. Email (password resets only)
 
-Deskbook sends emails through Supabase Auth, so there is no extra email service in the code.
-
-1. Supabase's built-in mailer is for testing only: it is heavily rate-limited and may only deliver to your own team's addresses. For real use open **Project Settings > Authentication > SMTP Settings**, turn on **Custom SMTP** and enter the details from any email provider (Resend, Postmark, SendGrid, Amazon SES, Google Workspace SMTP and so on).
-2. Optional: **Authentication > Emails > Invite user** lets you change the invitation email. `{{ .Data.workspace_name }}` inserts the client workspace's brand name and `{{ .ConfirmationURL }}` is the link.
-
-To check it works, invite your own second email address from **Team**.
+Invitations do not use email; see **Adding people** below. The only email Deskbook sends is the "Forgot your password?" link, through Supabase Auth. Supabase's built-in mailer is rate-limited and meant for testing. For real use open **Project Settings > Authentication > SMTP Settings**, turn on **Custom SMTP** and enter the details from any email provider (Resend, Postmark, SendGrid, Amazon SES and so on).
 
 For local work with real data, copy `.env.example` to `.env` and fill in the same two values.
 
@@ -50,24 +44,31 @@ For local work with real data, copy `.env.example` to `.env` and fill in the sam
 
 Deskbook is invite-only and does not expose public registration. In Supabase, open **Authentication > Users > Add user** and create the first account. The database automatically makes the first account the owner. Sign in with that account, then open Settings and set your business name and currency.
 
-## Adding employees
+## Adding people
 
-Open **Team**, enter the person's email, pick **Team member** or **Workspace admin**, and press **Send invite**.
+There are two kinds of admin:
 
-- **New person**: Supabase emails them an invitation link. Opening it signs them in and asks for their name and a password, then drops them into that workspace.
-- **Already has an account** (for example in another client workspace): they get access straight away and receive a sign-in link by email.
-- If the email cannot be sent (no service key, SMTP not set up, or running locally with `npm run dev`), Deskbook says why and copies a single-use link instead, which you can send yourself. **Email again** and the copy button stay available under Pending invitations.
+- **Admin**: the agency owner (the first account). Creates client workspaces, adds and removes people, and sets each workspace's branding.
+- **Sub admin**: runs one client workspace. Can manage its clients, work, invoices, reports and automations, but cannot add or remove people, change anyone's access, see the Workspaces console, or change the workspace's branding or URL.
 
-Invitations expire after seven days and are tied to that email address. The database rejects every sign-up that does not have a valid invitation, and only the platform owner or that workspace's admin can send one.
+Only the admin adds people:
 
-| | Owner | Team member |
-|---|---|---|
-| Clients | add, edit, delete | read only |
-| Work | everything | only work assigned to them |
-| Follow-ups | everything | only their own |
-| Invoices, payments, retainer amounts | everything | no access at all |
-| Team, business settings | yes | no |
-| Automations and invitations | yes | no |
+1. Open **Team** in the workspace, enter the person's email, pick **Team member** or **Sub admin**, and press **Create invite link**.
+2. The link is copied. Send it to them yourself (WhatsApp, Slack, anything private).
+3. They open it, see which workspace it is for with their email filled in, enter their name and choose a password. They are signed straight in.
+4. The link then stops working. Opening it again shows "This invite link was already used". From then on they sign in with their email and password.
+
+Unused links expire after seven days and are listed under **Unused invite links**, where you can copy one again or revoke it. If the email already has a Deskbook account (for example in another workspace), the link asks for that account's password instead and adds the new workspace.
+
+| | Admin | Sub admin | Team member |
+|---|---|---|---|
+| Clients | add, edit, delete | add, edit, delete | read only |
+| Work | everything | everything | only work assigned to them |
+| Follow-ups | everything | everything | only their own |
+| Invoices, payments, retainer amounts | everything | everything | no access at all |
+| Automations, currency, exchange rates | yes | yes | no |
+| Add or remove people, change access | yes | no | no |
+| Workspaces console, branding, workspace URL | yes | no | no |
 
 These rules are enforced in the database (row-level security in `schema.sql`), not just hidden in the screen.
 
@@ -129,17 +130,20 @@ Reports (owner only) answers "what came in, and when".
 
 - Agency console, switching between workspaces, and that no data from one workspace shows in another.
 - Multi-currency on sample data: a EUR client inside a USD workspace, converted totals, recording a EUR payment, removing and restoring a rate.
-- The invite function type-checks.
+- One-time invite links against a mocked Supabase: valid link (new and existing account), passwords that do not match, a link used in another tab while the form is open, and used, expired and revoked links. Creating and copying links on Team at desktop and phone width.
+- Admin and sub admin: a sub admin sees no Workspaces section, no invite form, no access controls and no branding settings, and `/workspaces` sends them back to Today.
+- Every page passes a colour-contrast check (WCAG AA) in light and dark at desktop and phone width.
 
-Not tested here: a live Supabase project (invitation, sign-in and password reset emails) and a real Vercel deploy. After you set up, invite your own second address once to confirm emails arrive.
+Not tested here: a live Supabase project and a real Vercel deploy. After you set up, create an invite link for your own second address and open it in a private window to confirm it works once.
 
-**Updating an existing install:** run the whole `supabase/schema.sql` again in the SQL editor. It only adds what is missing and keeps your data. Existing invoices get the workspace currency.
+**Updating an existing install:** run the whole `supabase/schema.sql` again in the SQL editor. It only adds what is missing and keeps your data. Existing invoices get the workspace currency. This update is required for invite links and the sub admin rules.
 
 ## Where things are
 
 ```
 supabase/schema.sql   tables, triggers, security rules (safe to re-run after updates)
-api/invite.ts         Vercel function that emails invitations through Supabase Auth
+api/accept-invite.ts  Vercel function that creates the account from a one-time invite link
+api/invite.ts         optional: emails an invitation through Supabase Auth (not used by the app now)
 vercel.json           build, page routing, security headers
 src/lib/backend.ts    Supabase client (falls back to sample data when keys are missing)
 src/lib/store.tsx     login, data loading, saving, toasts

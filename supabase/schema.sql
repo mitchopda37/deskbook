@@ -2,9 +2,10 @@
 -- Run this once in Supabase: SQL Editor > New query > paste > Run.
 --
 -- Access model
---   platform owner (profiles.role = 'owner')  the agency. Sees every workspace and the Agency console.
---   workspace owner (workspace_members.role = 'owner')  a client admin. Full control of their own
---                   workspace (team, clients, money, branding, automations), nothing outside it.
+--   platform owner (profiles.role = 'owner')  "Admin", the agency. Sees every workspace and the
+--                   Agency console. The only role that invites or removes people or sets branding.
+--   workspace owner (workspace_members.role = 'owner')  "Sub admin". Runs their own workspace
+--                   (clients, money, automations, currency), nothing outside it.
 --   workspace member  sees that workspace's clients, plus the work and follow-ups assigned to them.
 --                   Never sees money.
 -- The first account created becomes the platform owner. Everyone after that needs an invitation
@@ -671,3 +672,99 @@ drop policy if exists invitations_owner on public.invitations;
 create policy invitations_owner on public.invitations for all to authenticated
   using (public.app_role() = 'owner' or public.workspace_role(workspace_id) = 'owner')
   with check (public.app_role() = 'owner' or public.workspace_role(workspace_id) = 'owner');
+
+-- ---------------------------------------------------------------- one-time invite links
+-- Admins share an invitation as a private link instead of an email. Whoever opens the link can
+-- see only who it is for and which workspace it opens. Accepting it marks it used, so the same
+-- link stops working; unused links still expire after 7 days. Revoking deletes the row.
+
+create or replace function public.invite_lookup(p_token text)
+returns jsonb
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  invite public.invitations%rowtype;
+  ws public.workspaces%rowtype;
+begin
+  select * into invite from public.invitations where token = coalesce(p_token, '');
+  if invite.id is null or invite.status = 'revoked' then return jsonb_build_object('status', 'invalid'); end if;
+  if invite.status = 'accepted' then return jsonb_build_object('status', 'used'); end if;
+  if invite.expires_at <= now() then return jsonb_build_object('status', 'expired'); end if;
+  select * into ws from public.workspaces where id = invite.workspace_id;
+  return jsonb_build_object(
+    'status', 'ok',
+    'email', lower(invite.email),
+    'role', invite.role,
+    'workspace', coalesce(nullif(ws.brand_name, ''), ws.name, 'Deskbook'),
+    'has_account', exists (select 1 from public.profiles p where lower(p.email) = lower(invite.email))
+  );
+end $$;
+
+-- For people who already have an account (for example in another workspace): sign in, then accept.
+create or replace function public.accept_invitation(p_token text)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  invite public.invitations%rowtype;
+  my_email text;
+begin
+  if auth.uid() is null then raise exception 'Sign in first, then open the invite link again'; end if;
+  select * into invite from public.invitations
+    where token = coalesce(p_token, '') and status = 'pending' and expires_at > now()
+    for update;
+  if invite.id is null then raise exception 'This invite link has expired or was already used. Ask for a new one.'; end if;
+  select email into my_email from public.profiles where id = auth.uid();
+  if lower(coalesce(my_email, '')) <> lower(invite.email) then
+    raise exception 'This invite link is for %. Sign in with that email.', invite.email;
+  end if;
+  insert into public.workspace_members (workspace_id, user_id, role)
+    values (invite.workspace_id, auth.uid(), invite.role) on conflict (workspace_id, user_id) do nothing;
+  update public.invitations set status = 'accepted' where id = invite.id;
+  return invite.workspace_id;
+end $$;
+
+revoke all on function public.invite_lookup(text) from public;
+grant execute on function public.invite_lookup(text) to anon, authenticated;
+revoke all on function public.accept_invitation(text) from public;
+grant execute on function public.accept_invitation(text) to authenticated;
+
+-- ---------------------------------------------------------------- admin and sub admin
+-- Admin     = the agency owner (profiles.role = 'owner'). Creates workspaces, invites and removes
+--             people, sets each workspace's white-label identity.
+-- Sub admin = a workspace admin (workspace_members.role = 'owner'). Runs one client workspace:
+--             clients, work, money, reports, automations. Cannot add or remove people, change
+--             anyone's access, see other workspaces, or change the workspace's branding or URL.
+
+drop policy if exists invitations_owner on public.invitations;
+create policy invitations_owner on public.invitations for all to authenticated
+  using (public.app_role() = 'owner')
+  with check (public.app_role() = 'owner');
+
+drop policy if exists workspace_members_write on public.workspace_members;
+create policy workspace_members_write on public.workspace_members for all to authenticated
+  using (public.app_role() = 'owner')
+  with check (public.app_role() = 'owner');
+
+create or replace function public.guard_workspace_identity()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  -- auth.uid() is null for the SQL editor and server code, which may change anything.
+  if auth.uid() is not null and coalesce(public.app_role(), '') <> 'owner' and (
+    new.slug is distinct from old.slug
+    or new.brand_name is distinct from old.brand_name
+    or new.accent_color is distinct from old.accent_color
+    or new.logo_url is distinct from old.logo_url
+    or new.owner_id is distinct from old.owner_id
+  ) then
+    raise exception 'Only the agency admin can change the workspace branding or URL';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists guard_workspace_identity on public.workspaces;
+create trigger guard_workspace_identity
+  before update on public.workspaces
+  for each row execute function public.guard_workspace_identity();

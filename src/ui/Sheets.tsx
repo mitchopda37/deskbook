@@ -23,7 +23,7 @@ export function Sheets() {
 function FormDrawer({
   title, saveLabel, onSave, onDelete, deleteLabel, children,
 }: { title: string; saveLabel: string; onSave(): Promise<unknown> | void; onDelete?(): void; deleteLabel?: string; children: ReactNode }) {
-  const { close } = useSheet()
+  const { close, leaving } = useSheet()
   const [busy, setBusy] = useState(false)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -36,6 +36,7 @@ function FormDrawer({
       <Drawer
         title={title}
         onClose={close}
+        leaving={leaving}
         footer={
           <>
             <button type="submit" className="btn btn-primary" disabled={busy}>{saveLabel}</button>

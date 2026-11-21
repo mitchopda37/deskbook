@@ -43,6 +43,42 @@ export async function emailInvitation(invitationId: string): Promise<InviteEmail
   }
 }
 
+export type InviteInfo =
+  | { status: 'ok'; email: string; role: 'owner' | 'member'; workspace: string; has_account: boolean }
+  | { status: 'used' | 'expired' | 'invalid' }
+  | { status: 'demo' }
+
+/** What a one-time invite link is for. Readable without signing in; reveals nothing without the token. */
+export async function lookupInvite(token: string): Promise<InviteInfo> {
+  if (!supabase) return { status: 'demo' }
+  const { data, error } = await supabase.rpc('invite_lookup', { p_token: token })
+  if (error) {
+    if (/invite_lookup/.test(error.message)) throw new Error('Invite links need the latest database update. Ask the admin to run supabase/schema.sql again.')
+    throw new Error(error.message)
+  }
+  return data as InviteInfo
+}
+
+export type CreateAccountResult = { ok: true } | { ok: false; unavailable: true } | { ok: false; unavailable?: false; reason: string; hasAccount?: boolean }
+
+/** Creates a confirmed account from a one-time invite link through /api/accept-invite. No email is sent. */
+export async function createInvitedAccount(token: string, name: string, password: string): Promise<CreateAccountResult> {
+  try {
+    const res = await fetch('/api/accept-invite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token, name, password }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (res.ok) return { ok: true }
+    // Local `npm run dev` has no /api, and a deployment without the service key cannot create accounts.
+    if (res.status === 404 || body.code === 'not_configured') return { ok: false, unavailable: true }
+    return { ok: false, reason: body.error || 'Could not create your account. Try again.', hasAccount: body.code === 'has_account' }
+  } catch {
+    return { ok: false, unavailable: true }
+  }
+}
+
 export interface Backend {
   list<T extends Table>(table: T): Promise<Data[T]>
   insert(table: Table, row: Record<string, unknown>): Promise<any>

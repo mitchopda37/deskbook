@@ -56,11 +56,12 @@ function Centered({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { loading, userId, signOut, recovering, welcoming } = useAuth()
+  const { loading, userId, signOut, recovering, welcoming, joining } = useAuth()
   const data = useData()
 
   if (loading) return <Splash />
-  if (!userId) return <Login />
+  // While an invite link signs someone in, keep its form on screen until the new workspace is added.
+  if (!userId || joining) return <Login />
   if (recovering) return <NewPassword />
   if (data.loading) return <><Preload /><AppSkeleton /></>
   if (data.error)
