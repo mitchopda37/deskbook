@@ -153,3 +153,91 @@ export function RateNotice({ missing, base, canEdit }: { missing: string[]; base
     </div>
   )
 }
+
+// ------------------------------------------------------------------ loading placeholders
+
+/** One shimmering placeholder block. Size it with Tailwind classes. */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <span aria-hidden="true" className={`skeleton ${className}`} />
+}
+
+/** Stands in for a page while its data or code arrives: heading, figures and a list, shaped like the real thing. */
+export function PageSkeleton() {
+  return (
+    <div role="status" aria-live="polite" aria-label="Loading" className="fade-in">
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-3">
+          <Skeleton className="h-9 w-56 md:w-72" />
+          <Skeleton className="h-4 w-72 max-w-[80vw] md:w-96" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="hidden h-10 w-28 sm:block" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+      </div>
+      <div className="mb-7 grid grid-cols-2 gap-px overflow-hidden rounded-[0.9rem] border border-line bg-line lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2.5 bg-surface px-5 py-4">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-7 w-28" />
+          </div>
+        ))}
+      </div>
+      <div className="panel divide-y divide-line">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-4 md:grid-cols-[auto_minmax(0,14rem)_1fr_auto]">
+            <Skeleton className="size-9 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="hidden h-2.5 w-full md:block" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading</span>
+    </div>
+  )
+}
+
+/** The whole app frame while the first data load runs, so the layout does not jump when it arrives. */
+export function AppSkeleton() {
+  return (
+    <div className="min-h-dvh md:pl-[252px]">
+      <aside aria-hidden="true" className="fixed inset-y-0 left-0 hidden w-[252px] flex-col gap-2 bg-rail p-3 md:flex">
+        <div className="mb-2 flex items-center gap-2.5">
+          <span className="skeleton skeleton-rail size-9 rounded-[0.6rem]" />
+          <span className="skeleton skeleton-rail h-4 w-32" />
+        </div>
+        <span className="skeleton skeleton-rail h-10 w-full rounded-[0.65rem]" />
+        <span className="skeleton skeleton-rail mb-3 h-9 w-full rounded-[0.55rem]" />
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="flex items-center gap-3 px-2 py-2">
+            <span className="skeleton skeleton-rail size-5 rounded-md" />
+            <span className="skeleton skeleton-rail h-3.5" style={{ width: `${[56, 44, 52, 64, 48, 58, 50][i]}%` }} />
+          </div>
+        ))}
+      </aside>
+      <header aria-hidden="true" className="flex h-14 items-center gap-2.5 border-b border-line bg-surface px-4 md:hidden">
+        <Skeleton className="size-9 rounded-[0.6rem]" />
+        <Skeleton className="h-4 w-36" />
+      </header>
+      <main className="mx-auto max-w-[1380px] px-4 pt-5 md:px-8 md:pt-8 xl:px-11">
+        <PageSkeleton />
+      </main>
+    </div>
+  )
+}
+
+/** Brand mark with a thin progress bar, shown for the instant before we know whether someone is signed in. */
+export function Splash() {
+  return (
+    <div role="status" aria-label="Loading Deskbook" className="grid min-h-dvh place-items-center bg-paper p-6">
+      <div className="fade-in flex w-48 flex-col items-center gap-5">
+        <span className="grid size-12 place-items-center rounded-[0.8rem] bg-primary font-display text-xl font-bold text-primary-ink shadow-[0_10px_30px_rgb(15_26_58/0.18)]">D</span>
+        <div className="loadbar w-full" />
+      </div>
+    </div>
+  )
+}

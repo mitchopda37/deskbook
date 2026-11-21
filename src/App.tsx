@@ -1,21 +1,55 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { HourglassMedium } from '@phosphor-icons/react'
 import { useAuth, useData } from './lib/store'
 import { Shell } from './ui/Shell'
+import { AppSkeleton, PageSkeleton, Splash } from './ui/kit'
 import Login from './pages/Login'
 
-const Today = lazy(() => import('./pages/Today'))
-const Work = lazy(() => import('./pages/Work'))
-const Clients = lazy(() => import('./pages/Clients'))
-const ClientDetail = lazy(() => import('./pages/ClientDetail'))
-const Money = lazy(() => import('./pages/Money'))
-const Followups = lazy(() => import('./pages/Followups'))
-const Reports = lazy(() => import('./pages/Reports'))
-const Team = lazy(() => import('./pages/Team'))
-const Settings = lazy(() => import('./pages/Settings'))
-const Automations = lazy(() => import('./pages/Automations'))
-const Workspaces = lazy(() => import('./pages/Workspaces'))
+// Each page is its own download. The same loaders are reused to fetch them all in the
+// background right after sign-in, so moving between views never waits on the network.
+const pages = {
+  Today: () => import('./pages/Today'),
+  Work: () => import('./pages/Work'),
+  Clients: () => import('./pages/Clients'),
+  ClientDetail: () => import('./pages/ClientDetail'),
+  Money: () => import('./pages/Money'),
+  Followups: () => import('./pages/Followups'),
+  Reports: () => import('./pages/Reports'),
+  Team: () => import('./pages/Team'),
+  Settings: () => import('./pages/Settings'),
+  Automations: () => import('./pages/Automations'),
+  Workspaces: () => import('./pages/Workspaces'),
+}
+const Today = lazy(pages.Today)
+const Work = lazy(pages.Work)
+const Clients = lazy(pages.Clients)
+const ClientDetail = lazy(pages.ClientDetail)
+const Money = lazy(pages.Money)
+const Followups = lazy(pages.Followups)
+const Reports = lazy(pages.Reports)
+const Team = lazy(pages.Team)
+const Settings = lazy(pages.Settings)
+const Automations = lazy(pages.Automations)
+const Workspaces = lazy(pages.Workspaces)
+
+function usePreloadPages() {
+  useEffect(() => {
+    const load = () => Object.values(pages).forEach((get) => get().catch(() => { /* retried on visit */ }))
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(load, { timeout: 2000 })
+      return () => window.cancelIdleCallback(id)
+    }
+    const id = setTimeout(load, 800)
+    return () => clearTimeout(id)
+  }, [])
+}
+
+/** Starts the data request and page downloads together, as soon as we know who is signed in. */
+function Preload() {
+  usePreloadPages()
+  return null
+}
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="grid min-h-dvh place-items-center p-6 text-center">{children}</div>
@@ -25,10 +59,10 @@ export default function App() {
   const { loading, userId, signOut, recovering, welcoming } = useAuth()
   const data = useData()
 
-  if (loading) return <Centered><p className="text-mute">Opening your deskbook</p></Centered>
+  if (loading) return <Splash />
   if (!userId) return <Login />
   if (recovering) return <NewPassword />
-  if (data.loading) return <Centered><p className="text-mute">Loading clients and work</p></Centered>
+  if (data.loading) return <><Preload /><AppSkeleton /></>
   if (data.error)
     return (
       <Centered>
@@ -62,7 +96,8 @@ export default function App() {
 
   return (
     <Shell>
-      <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-mute">Opening view…</div>}>
+      <Preload />
+      <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Today />} />
           <Route path="/work" element={<Work />} />
