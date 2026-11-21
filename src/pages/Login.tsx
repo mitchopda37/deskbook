@@ -41,7 +41,7 @@ export default function Login() {
         <div className="pointer-events-none absolute -top-40 -right-32 size-[34rem] rounded-full bg-[#284996]/28 blur-3xl" />
         <div className="relative flex items-center gap-3">
           <span className="grid size-10 place-items-center rounded-[0.7rem] bg-white font-display text-lg font-bold text-[#0e1736]">D</span>
-          <div><p className="font-display text-lg font-semibold leading-tight text-white">Deskbook</p><p className="text-[0.72rem] tracking-[0.12em] uppercase opacity-60">Client operations</p></div>
+          <div><p className="font-display text-lg font-semibold leading-tight text-white">Deskbook</p><p className="text-[0.72rem] tracking-[0.12em] text-rail-mute uppercase">Client operations</p></div>
         </div>
         <div className="relative my-12 max-w-2xl">
           <p className="mb-4 text-[0.78rem] font-semibold tracking-[0.13em] text-[#91a8e8] uppercase">One view for the whole business</p>
@@ -64,7 +64,7 @@ export default function Login() {
             <LoginMetric value="24" label="active clients" /><LoginMetric value="$18.4k" label="received" /><LoginMetric value="92%" label="on-time work" />
           </div>
         </div>
-        <div className="relative flex items-center gap-2 text-[0.82rem] opacity-65"><LockKey size={15} />Secure workspace access · Powered by your Supabase project</div>
+        <div className="relative flex items-center gap-2 text-[0.82rem] text-rail-mute"><LockKey size={15} />Secure workspace access · Powered by your Supabase project</div>
       </section>
 
       <section className="flex items-center justify-center bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--focus)_8%,transparent),transparent_35%)] px-5 py-10 sm:px-8">

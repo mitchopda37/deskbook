@@ -49,7 +49,7 @@ export default function Automations() {
       ) : (
         <div className="space-y-3">
           {automations.map((rule) => (
-            <article key={rule.id} className={`panel group overflow-hidden transition ${rule.enabled ? '' : 'opacity-65'}`}>
+            <article key={rule.id} className={`panel group overflow-hidden transition ${rule.enabled ? '' : 'border-dashed bg-sunk shadow-none'}`}>
               <div className="flex flex-wrap items-center gap-4 px-4 py-4 md:px-5">
                 <button aria-label={rule.enabled ? 'Pause automation' : 'Enable automation'}
                   onClick={() => patch('automations', rule.id, { enabled: !rule.enabled }, rule.enabled ? 'Automation paused' : 'Automation enabled')}

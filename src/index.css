@@ -20,12 +20,15 @@
   --primary-ink: #ffffff;
   --rail: #0e1736;
   --rail-ink: #b4bedb;
+  --rail-mute: #8e9bc4;      /* secondary text on the rail, 5.6:1 */
   --rail-line: #222e58;
+  --field-line: #b9c3d4;     /* input borders, 3:1 against surface so fields are findable */
   --gold: #f2b01e;
   --gold-ink: #241a00;
   --paid: #09724e;
   --due: #8a5a00;
   --late: #c2253a;
+  --late-ink: #ffffff;       /* text on solid --late */
   --focus: #3d6bff;
   color-scheme: light;
 }
@@ -33,17 +36,20 @@
   --paper: #0a0f1f;
   --surface: #121930;
   --sunk: #0d1428;
-  --line: #232d4d;
+  --line: #2b3659;
   --ink: #e9edf8;
-  --mute: #98a4c6;
+  --mute: #a3aecd;
   --primary: #e9edf8;
   --primary-ink: #0a0f1f;
   --rail: #070b18;
-  --rail-ink: #a9b4d3;
+  --rail-ink: #b3bddb;
+  --rail-mute: #8794ba;
   --rail-line: #1a2342;
+  --field-line: #46527c;
   --paid: #3fcb96;
   --due: #f4b93a;
   --late: #ff7c8b;
+  --late-ink: #2a0309;       /* light red needs dark text */
   --focus: #7c9bff;
   color-scheme: dark;
 }
@@ -60,6 +66,8 @@
   --color-rail: var(--rail);
   --color-rail-ink: var(--rail-ink);
   --color-rail-line: var(--rail-line);
+  --color-rail-mute: var(--rail-mute);
+  --color-late-ink: var(--late-ink);
   --color-primary: var(--primary);
   --color-primary-ink: var(--primary-ink);
   --color-gold: var(--gold);
@@ -93,7 +101,8 @@
   .btn:hover { border-color: color-mix(in srgb, var(--mute) 72%, transparent); box-shadow: 0 3px 10px rgb(15 26 58 / 0.08); }
   .btn:active { transform: translateY(1px) scale(0.985); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary { background: var(--workspace-accent, var(--primary)); border-color: var(--workspace-accent, var(--primary)); color: #fff; }
+  /* Outside a workspace (login, welcome) this is the theme's primary; inside, the workspace accent with a computed readable ink. */
+  .btn-primary { background: var(--workspace-accent, var(--primary)); border-color: var(--workspace-accent, var(--primary)); color: var(--workspace-accent-ink, var(--primary-ink)); }
   .btn-primary:hover { background: color-mix(in srgb, var(--workspace-accent, var(--primary)) 86%, var(--surface)); border-color: transparent; }
   .btn-quiet { border-color: transparent; background: transparent; color: var(--mute); padding: 0 0.6rem; }
   .btn-quiet:hover { background: var(--sunk); color: var(--ink); border-color: transparent; }
@@ -105,10 +114,11 @@
 
   .input {
     width: 100%; height: 2.5rem; padding: 0 0.75rem; border-radius: 0.5rem;
-    border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 1rem;
+    border: 1px solid var(--field-line); background: var(--surface); color: var(--ink); font-size: 1rem;
   }
   textarea.input { height: auto; padding: 0.6rem 0.75rem; resize: vertical; min-height: 5rem; }
-  .input::placeholder { color: color-mix(in srgb, var(--mute) 70%, transparent); }
+  .input:disabled { background: var(--sunk); color: var(--mute); cursor: not-allowed; }
+  .input::placeholder { color: var(--mute); opacity: 1; }
   .input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent); }
   @media (max-width: 767px) { .input { font-size: 16px; height: 2.75rem; } .btn { height: 2.6rem; } .btn-sm { height: 2.25rem; } .btn-icon { width: 2.6rem; } .btn-icon.btn-sm { width: 2.25rem; } }
   .field-label { display: block; font-size: 0.87rem; font-weight: 600; margin-bottom: 0.3rem; }
@@ -138,7 +148,7 @@
     font-weight: 600; font-size: 0.93rem; box-shadow: 0 8px 24px rgb(16 27 59 / 0.25);
     animation: rise 0.18s ease-out;
   }
-  .toast-error { background: var(--late); color: #fff; }
+  .toast-error { background: var(--late); color: var(--late-ink); }
 
   .sheet { animation: slide 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
   .sheet-up { animation: up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }

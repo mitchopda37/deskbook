@@ -7,6 +7,7 @@ import {
 import { useAuth, useData, useSheet, type Sheet } from '../lib/store'
 import { isDemo } from '../lib/backend'
 import { today } from '../lib/dates'
+import { readableInk } from '../lib/color'
 import { Avatar } from './kit'
 import { Sheets } from './Sheets'
 import { Search } from './Search'
@@ -86,7 +87,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const myName = me?.full_name || me?.email || 'You'
 
   return (
-    <div className="min-h-dvh transition-[padding] duration-200 md:pl-(--rail) print:pl-0!" style={{ '--rail': slim ? '72px' : '252px', '--workspace-accent': activeWorkspace?.accent_color ?? '#3159c9' } as React.CSSProperties}>
+    <div className="min-h-dvh transition-[padding] duration-200 md:pl-(--rail) print:pl-0!" style={{ '--rail': slim ? '72px' : '252px', '--workspace-accent': activeWorkspace?.accent_color ?? '#3159c9', '--workspace-accent-ink': readableInk(activeWorkspace?.accent_color ?? '#3159c9') } as React.CSSProperties}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       {/* ---------- desktop rail ---------- */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-(--rail) flex-col bg-rail text-rail-ink transition-[width] duration-200 md:flex print:hidden">
@@ -95,7 +96,7 @@ export function Shell({ children }: { children: ReactNode }) {
           {!slim && (
             <div className="min-w-0 flex-1">
               {workspaces.length > 1 ? <select aria-label="Active workspace" value={activeWorkspace?.id ?? ''} onChange={(e) => switchWorkspace(e.target.value)} className="-ml-1 w-full truncate rounded border-0 bg-transparent px-1 font-display text-[1.02rem] leading-tight font-semibold text-white outline-none [&>option]:text-ink">{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select> : <p className="truncate font-display text-[1.05rem] leading-tight font-semibold text-white">{workspaceName}</p>}
-              <p className="px-1 text-[0.68rem] leading-tight tracking-[0.11em] uppercase opacity-55">Client workspace</p>
+              <p className="px-1 text-[0.68rem] leading-tight tracking-[0.11em] text-rail-mute uppercase">Client workspace</p>
             </div>
           )}
           <button onClick={() => setRail(!slim)} className="rounded-md p-1.5 hover:bg-white/10 hover:text-white"
@@ -118,7 +119,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <div key={gi} className={gi > 0 ? 'mt-4' : ''}>
               {g.label && (slim
                 ? <div className="mx-2 mb-2 border-t border-rail-line" />
-                : <p className="mb-1 px-3 text-[0.8rem] font-medium opacity-60">{g.label}</p>)}
+                : <p className="mb-1 px-3 text-[0.8rem] font-medium text-rail-mute">{g.label}</p>)}
               <div className="space-y-0.5">
                 {g.items.map((n) => (
                   <NavLink key={n.to} to={n.to} end={n.to === '/'} title={slim ? n.label : undefined}
@@ -132,7 +133,7 @@ export function Shell({ children }: { children: ReactNode }) {
                         {!slim && <span className="flex-1">{n.label}</span>}
                         {!!n.count && (slim
                           ? <span className={`absolute top-1.5 right-2.5 size-2 rounded-full ${n.alert ? 'bg-late' : 'bg-gold'}`} />
-                          : <span className={`min-w-5 rounded-full px-1.5 text-center text-[0.78rem] leading-5 font-semibold ${n.alert ? 'bg-late text-white' : 'bg-gold text-gold-ink'}`}>{n.count}</span>)}
+                          : <span className={`min-w-5 rounded-full px-1.5 text-center text-[0.78rem] leading-5 font-semibold ${n.alert ? 'bg-late text-late-ink' : 'bg-gold text-gold-ink'}`}>{n.count}</span>)}
                       </>
                     )}
                   </NavLink>
@@ -234,8 +235,8 @@ function Mark({ name, logo, accent, onLight = false }: { name: string; logo?: st
   return (
     <span aria-hidden="true"
       className={`grid size-9 shrink-0 place-items-center rounded-[0.6rem] font-display text-[1.05rem] font-semibold ${
-        accent ? 'text-white' : onLight ? 'bg-primary text-primary-ink' : 'bg-white text-[#0e1736]'
-      }`} style={accent ? { background: accent } : undefined}>
+        accent ? '' : onLight ? 'bg-primary text-primary-ink' : 'bg-white text-[#0e1736]'
+      }`} style={accent ? { background: accent, color: readableInk(accent) } : undefined}>
       {(name.trim()[0] ?? 'D').toUpperCase()}
     </span>
   )
@@ -256,7 +257,7 @@ function UserMenu({ name, role, slim, theme, toggle, signOut }: {
           <>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[0.93rem] font-semibold text-white">{name}</span>
-              <span className="block text-[0.8rem] leading-tight opacity-70">{role}</span>
+              <span className="block text-[0.8rem] leading-tight text-rail-mute">{role}</span>
             </span>
             <CaretUpDown size={16} />
           </>

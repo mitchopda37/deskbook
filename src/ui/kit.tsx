@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom'
 import { dayLabel, today } from '../lib/dates'
 import type { Bill } from '../lib/types'
 
-const TINTS = ['#2f5bd9', '#0e8a5e', '#b0481e', '#7a4bc4', '#0b7f96', '#a8317a']
+// Every tint keeps white initials at 4.5:1 or better.
+const TINTS = ['#2f5bd9', '#0b7a53', '#b0481e', '#7a4bc4', '#0a7389', '#a8317a']
 
 export function Avatar({ name, size = 26 }: { name: string; size?: number }) {
   const clean = name.trim() || '?'
@@ -51,7 +52,7 @@ export function Segmented<T extends string>({
           }`}
         >
           {o.label}
-          {o.count !== undefined && <span className="font-medium opacity-60">{o.count}</span>}
+          {o.count !== undefined && <span className="font-medium text-mute">{o.count}</span>}
         </button>
       ))}
     </div>
