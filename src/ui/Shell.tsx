@@ -17,7 +17,7 @@ export function useTheme() {
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
     document.documentElement.dataset.theme = next
-    localStorage.setItem('theme', next)
+    try { localStorage.setItem('deskbook-theme', next) } catch { /* storage blocked: applies for this visit only */ }
     setTheme(next)
   }
   return { theme, toggle }

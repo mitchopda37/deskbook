@@ -6,9 +6,10 @@ import { AuthProvider, SheetProvider, ToastProvider } from './lib/store'
 import App from './App'
 import './index.css'
 
-const saved = localStorage.getItem('theme')
-document.documentElement.dataset.theme =
-  saved ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+// Light is the default for everyone. Dark only applies when the person picks it from the theme toggle.
+let saved: string | null = null
+try { saved = localStorage.getItem('deskbook-theme') } catch { /* storage blocked: stay light */ }
+document.documentElement.dataset.theme = saved === 'dark' ? 'dark' : 'light'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
