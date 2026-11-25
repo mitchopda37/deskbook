@@ -66,6 +66,8 @@ Unused links expire after seven days and are listed under **Unused invite links*
 | Work | everything | everything | only work assigned to them |
 | Follow-ups | everything | everything | only their own |
 | Invoices, payments, retainer amounts | everything | everything | no access at all |
+| Assignments | everything | everything | only ones they are the writer on: can change status and notes |
+| Assignment prices, advances, payments, calculator, assignment report | yes | yes | no access at all |
 | Automations, currency, exchange rates | yes | yes | no |
 | Add or remove people, change access | yes | no | no |
 | Workspaces console, branding, workspace URL | yes | no | no |
@@ -100,6 +102,29 @@ Every operational table carries a `workspace_id`. Supabase row-level security ch
 - If an invoice uses a currency with no rate, Invoices, Today and Reports show a warning until you add one.
 - CSV exports include the currency, the original amount and the converted amount.
 
+## Student assignments
+
+A separate module in the side menu, under **Assignments**.
+
+**Assignments** lists every piece of student work by deadline, grouped into *past the deadline*, *due in the next 24 hours*, *next 3 days* and *later*. Each row shows the student, subject, university, word count, the exact deadline with a countdown, the writer, and how much of the price has been paid. Status can be changed right in the row (New, In progress, In review, Delivered, Cancelled); marking it Delivered records the time, which is how on-time delivery is measured. Filters: Open, Late, To collect, Delivered, Cancelled, All, plus search and a writer filter. **Export CSV** gives every field.
+
+**New assignment** asks for the title, student, contact, university, subject or unit code, deadline (date and time), words, writer, status and brief. Under **Price and advance** you enter the total price and currency, then the advance as a percentage (0, 25, 30, 40, 50, 100 or any number) or a fixed amount. It shows Total, Advance and On delivery straight away. Tick **Advance already received** to record the advance in the same step.
+
+**Payments** are recorded as *Advance* or *Balance*. The form suggests whatever is still missing from the advance first, then the remaining balance. The database refuses a payment above the price, refuses a price lower than what was already paid, and locks the currency once a payment exists.
+
+**Calculator** works out a quote without saving anything: price fixed, per 1,000 words or per page (250 words), an optional rush fee and discount, the advance as a percentage or amount, the rest split into up to four payments, and what is still due after any amount already received. **Copy quote for the student** puts a ready-to-send summary on the clipboard; **Create assignment with these numbers** opens a new assignment with the price, currency, advance and words filled in.
+
+**Assignment report** (This month, Last month, Last 3 months, This year, All time):
+- assignments due, their value, money received split into advance and balance, what students still owe today, on-time delivery rate, work past the deadline, deadlines in the next 7 days, and open work started without its full advance
+- the last six months of work and money side by side
+- status breakdown, writers (assignments, delivered, on-time %, open, late, words, value), students (orders, value, paid, still owed), top subjects
+- action lists: collect now, advance not received, past the deadline, due in the next 7 days, each with a button to record the payment or open the assignment
+- every payment received in the period, print or save as PDF, and a CSV export
+
+Assignments due within two days also show on **Today**, the side menu shows a red count for late work (gold for work due within a day), and Ctrl+K search finds assignments by title, student, subject or university.
+
+Every currency dropdown now shows the name next to the code (for example "AUD · Australian Dollar"), and AUD is second in the list. Australian dollars work like any other currency: set an AUD rate in Settings if your main currency is something else.
+
 ## Reports
 
 Reports (owner only) answers "what came in, and when".
@@ -132,11 +157,13 @@ Reports (owner only) answers "what came in, and when".
 - Multi-currency on sample data: a EUR client inside a USD workspace, converted totals, recording a EUR payment, removing and restoring a rate.
 - One-time invite links against a mocked Supabase: valid link (new and existing account), passwords that do not match, a link used in another tab while the form is open, and used, expired and revoked links. Creating and copying links on Team at desktop and phone width.
 - Admin and sub admin: a sub admin sees no Workspaces section, no invite form, no access controls and no branding settings, and `/workspaces` sends them back to Today.
-- Every page passes a colour-contrast check (WCAG AA) in light and dark at desktop and phone width.
+- Student assignments on sample data: creating one in AUD with a 40% advance received at once, recording the balance (the form picked Balance and the right amount), the row switching to paid in full, marking it delivered on time, the To collect filter, the calculator (3,000 words at A$120 per 1,000, +20% rush, −10% discount = A$388.80; 30% advance A$116.64; the rest in two payments of A$136.08), copying the quote, creating an assignment from the calculator, the report, search, and the Today card.
+- Assignments, Calculator and Assignment report at 320 and 390 px wide with no sideways scrolling.
+- Every page, including the three assignment pages, passes a colour-contrast check (WCAG AA) in light and dark at desktop and phone width.
 
 Not tested here: a live Supabase project and a real Vercel deploy. After you set up, create an invite link for your own second address and open it in a private window to confirm it works once.
 
-**Updating an existing install:** run the whole `supabase/schema.sql` again in the SQL editor. It only adds what is missing and keeps your data. Existing invoices get the workspace currency. This update is required for invite links and the sub admin rules.
+**Updating an existing install:** run the whole `supabase/schema.sql` again in the SQL editor. It only adds what is missing and keeps your data. Existing invoices get the workspace currency. This update is required for invite links, the sub admin rules and student assignments. Until it is run, the Assignments page shows a notice and the rest of the app keeps working.
 
 ## Where things are
 
@@ -150,7 +177,10 @@ src/lib/store.tsx     login, data loading, saving, toasts
 src/lib/demo.ts       sample data
 src/ui/               shell, drawers/forms, shared pieces
 src/ui/Search.tsx      Ctrl+K search
-src/pages/            Today, Work, Clients, Invoices, Reports, Follow-ups, Team, Automations, Workspaces, Settings
+src/pages/            Today, Work, Clients, Invoices, Reports, Follow-ups, Team, Automations, Workspaces, Settings,
+                      Assignments, Calculator, AssignmentReport
+src/lib/assignments.ts advance split, deadline wording, CSV export for assignments
+src/ui/AssignmentSheets.tsx  assignment and assignment payment forms
 src/index.css         colours and component styles (light and dark)
 ```
 

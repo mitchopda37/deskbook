@@ -4,7 +4,7 @@ import { useActions, useAuth, useData } from '../lib/store'
 import { isDemo } from '../lib/backend'
 import { useTheme } from '../ui/Shell'
 import { Field, PageHead } from '../ui/kit'
-import { CURRENCIES } from '../lib/types'
+import { CURRENCIES, currencyLabel } from '../lib/types'
 
 export default function Settings() {
   const { me, activeWorkspace, workspaceName, currency, isOwner, isPlatformOwner, money, currenciesInUse } = useData()
@@ -63,7 +63,7 @@ export default function Settings() {
             <div className="grid gap-4 sm:grid-cols-2">{isPlatformOwner && <Field label="Workspace URL"><div className="flex"><span className="grid place-items-center rounded-l-[0.5rem] border border-r-0 border-line bg-sunk px-2.5 text-mute">/</span><input className="input rounded-l-none" required pattern="[a-z0-9\-]+" value={ws.slug} onChange={(e) => setWs({ ...ws, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} /></div></Field>}
             <Field label="Main currency" hint={`Totals and reports are shown in this, e.g. ${new Intl.NumberFormat(undefined, { style: 'currency', currency: ws.currency, maximumFractionDigits: 0 }).format(125000)}. Each client and invoice can use its own currency. Changing this does not convert amounts (currently ${money(125000)}).`}>
               <select className="input" value={ws.currency} onChange={(e) => setWs({ ...ws, currency: e.target.value })}>
-                {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                {CURRENCIES.map((c) => <option key={c} value={c}>{currencyLabel(c)}</option>)}
               </select>
             </Field></div>
             <fieldset className="rounded-[0.8rem] border border-line p-4">
@@ -86,7 +86,7 @@ export default function Settings() {
               <div className="mt-3 flex gap-2">
                 <select className="input w-auto" aria-label="Add a currency" value={extra} onChange={(e) => setExtra(e.target.value)}>
                   <option value="">Add a currency…</option>
-                  {CURRENCIES.filter((c) => c !== ws.currency && !rateCurrencies.includes(c)).map((c) => <option key={c}>{c}</option>)}
+                  {CURRENCIES.filter((c) => c !== ws.currency && !rateCurrencies.includes(c)).map((c) => <option key={c} value={c}>{currencyLabel(c)}</option>)}
                 </select>
                 <button type="button" className="btn" disabled={!extra} onClick={() => { setRates({ ...rates, [extra]: '' }); setExtra('') }}>Add</button>
               </div>

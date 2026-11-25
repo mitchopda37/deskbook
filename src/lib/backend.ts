@@ -87,6 +87,11 @@ export interface Backend {
   remove(table: Table, pk: string, id: string | number): Promise<void>
 }
 
+const NUMERIC = ['amount', 'advance_due']
+const OPTIONAL_TABLES = new Set<Table>(['assignments', 'assignment_fees', 'assignment_payments'])
+/** Tables the connected database does not have yet (schema.sql not re-run since an update). */
+export const missingTables = new Set<Table>()
+
 const fail = (error: { message: string } | null) => {
   if (error) throw new Error(error.message)
 }
@@ -94,9 +99,18 @@ const fail = (error: { message: string } | null) => {
 const live: Backend = {
   async list(table) {
     const { data, error } = await supabase!.from(table).select('*')
+    // Newer modules keep working before the database update is run: they just show as empty.
+    if (error && OPTIONAL_TABLES.has(table) && /does not exist|could not find the table|schema cache/i.test(error.message)) {
+      missingTables.add(table)
+      return [] as any
+    }
     fail(error)
     // numeric columns arrive as strings from Postgres
-    return (data ?? []).map((r: any) => ('amount' in r ? { ...r, amount: Number(r.amount) } : r)) as any
+    return (data ?? []).map((r: any) => {
+      const out = { ...r }
+      for (const k of NUMERIC) if (k in out && out[k] !== null) out[k] = Number(out[k])
+      return out
+    }) as any
   },
   async insert(table, row) {
     const { data, error } = await supabase!.from(table).insert(row).select().single()

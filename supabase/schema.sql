@@ -776,3 +776,168 @@ drop trigger if exists guard_workspace_identity on public.workspaces;
 create trigger guard_workspace_identity
   before update on public.workspaces
   for each row execute function public.guard_workspace_identity();
+
+-- ---------------------------------------------------------------- student assignments
+-- Assignments are written for students against a deadline. The work lives in `assignments`, which
+-- the assigned writer can see. The money lives in two tables only admins and sub admins can read:
+--   assignment_fees      the agreed price, its currency and the advance asked for up front
+--   assignment_payments  every payment received, marked as advance or balance
+-- Remaining = price - all payments. The database refuses payments above the price.
+
+create or replace function public.workspace_manager(wid uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$ select coalesce(public.app_role() = 'owner', false) or coalesce(public.workspace_role(wid) = 'owner', false) $$;
+grant execute on function public.workspace_manager(uuid) to authenticated;
+
+create table if not exists public.assignments (
+  id              uuid primary key default gen_random_uuid(),
+  workspace_id    uuid not null references public.workspaces on delete cascade,
+  title           text not null,
+  student_name    text not null,
+  student_contact text not null default '',
+  institution     text not null default '',
+  subject         text not null default '',
+  word_count      integer check (word_count is null or word_count >= 0),
+  details         text not null default '',
+  status          text not null default 'new' check (status in ('new', 'in_progress', 'review', 'delivered', 'cancelled')),
+  assignee_id     uuid references public.profiles on delete set null,
+  deadline        timestamptz not null,
+  delivered_at    timestamptz,
+  created_by      uuid references public.profiles on delete set null default auth.uid(),
+  created_at      timestamptz not null default now()
+);
+create index if not exists assignments_workspace_idx on public.assignments (workspace_id, deadline);
+
+create table if not exists public.assignment_fees (
+  assignment_id uuid primary key references public.assignments on delete cascade,
+  workspace_id  uuid not null references public.workspaces on delete cascade,
+  amount        numeric(12, 2) not null default 0 check (amount >= 0),
+  currency      text not null check (currency ~ '^[A-Z]{3}$'),
+  advance_due   numeric(12, 2) not null default 0 check (advance_due >= 0),
+  check (advance_due <= amount)
+);
+create index if not exists assignment_fees_workspace_idx on public.assignment_fees (workspace_id);
+
+create table if not exists public.assignment_payments (
+  id            uuid primary key default gen_random_uuid(),
+  workspace_id  uuid not null references public.workspaces on delete cascade,
+  assignment_id uuid not null references public.assignments on delete cascade,
+  amount        numeric(12, 2) not null check (amount > 0),
+  kind          text not null default 'advance' check (kind in ('advance', 'balance')),
+  paid_on       date not null default current_date,
+  method        text not null default '',
+  note          text not null default '',
+  created_at    timestamptz not null default now()
+);
+create index if not exists assignment_payments_workspace_idx on public.assignment_payments (workspace_id, paid_on);
+create index if not exists assignment_payments_assignment_idx on public.assignment_payments (assignment_id);
+
+-- Fees and payments must belong to an assignment in the same workspace.
+create or replace function public.guard_assignment_child()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare parent_ws uuid;
+begin
+  select workspace_id into parent_ws from public.assignments where id = new.assignment_id;
+  if parent_ws is distinct from new.workspace_id then
+    raise exception 'That assignment belongs to a different workspace';
+  end if;
+  return new;
+end $$;
+drop trigger if exists guard_assignment_child on public.assignment_fees;
+create trigger guard_assignment_child before insert or update on public.assignment_fees
+  for each row execute function public.guard_assignment_child();
+drop trigger if exists guard_assignment_child on public.assignment_payments;
+create trigger guard_assignment_child before insert or update on public.assignment_payments
+  for each row execute function public.guard_assignment_child();
+
+-- Never more received than the price.
+create or replace function public.guard_assignment_payment_total()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare price numeric; already numeric;
+begin
+  select amount into price from public.assignment_fees where assignment_id = new.assignment_id;
+  if price is null then raise exception 'Set a price for this assignment before recording payments'; end if;
+  select coalesce(sum(amount), 0) into already
+    from public.assignment_payments where assignment_id = new.assignment_id and id <> new.id;
+  if already + new.amount > price then
+    raise exception 'This payment is more than what is still owed on the assignment';
+  end if;
+  return new;
+end $$;
+drop trigger if exists guard_assignment_payment_total on public.assignment_payments;
+create trigger guard_assignment_payment_total before insert or update on public.assignment_payments
+  for each row execute function public.guard_assignment_payment_total();
+
+-- Lowering a price below what was already received would make "remaining" negative.
+create or replace function public.guard_assignment_fee()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare already numeric;
+begin
+  select coalesce(sum(amount), 0) into already from public.assignment_payments where assignment_id = new.assignment_id;
+  if new.amount < already then
+    raise exception 'The price cannot be lower than what was already paid (%)', already;
+  end if;
+  if tg_op = 'UPDATE' and new.currency is distinct from old.currency and already > 0 then
+    raise exception 'The currency cannot change after payments were recorded';
+  end if;
+  return new;
+end $$;
+drop trigger if exists guard_assignment_fee on public.assignment_fees;
+create trigger guard_assignment_fee before insert or update on public.assignment_fees
+  for each row execute function public.guard_assignment_fee();
+
+-- Writers may move their own assignment along and add notes, nothing else.
+create or replace function public.guard_assignment_writer()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null or public.workspace_manager(old.workspace_id) then return new; end if;
+  if new.title is distinct from old.title or new.student_name is distinct from old.student_name
+    or new.student_contact is distinct from old.student_contact or new.institution is distinct from old.institution
+    or new.subject is distinct from old.subject or new.word_count is distinct from old.word_count
+    or new.deadline is distinct from old.deadline or new.assignee_id is distinct from old.assignee_id
+    or new.workspace_id is distinct from old.workspace_id or new.created_by is distinct from old.created_by
+    or new.status = 'cancelled' then
+    raise exception 'Only an admin can change those details';
+  end if;
+  return new;
+end $$;
+drop trigger if exists guard_assignment_writer on public.assignments;
+create trigger guard_assignment_writer before update on public.assignments
+  for each row execute function public.guard_assignment_writer();
+
+alter table public.assignments enable row level security;
+alter table public.assignment_fees enable row level security;
+alter table public.assignment_payments enable row level security;
+grant select, insert, update, delete on public.assignments, public.assignment_fees, public.assignment_payments to authenticated;
+
+drop policy if exists assignments_read on public.assignments;
+create policy assignments_read on public.assignments for select to authenticated using (
+  public.workspace_manager(workspace_id)
+  or (public.workspace_role(workspace_id) = 'member' and assignee_id = auth.uid())
+);
+drop policy if exists assignments_insert on public.assignments;
+create policy assignments_insert on public.assignments for insert to authenticated
+  with check (public.workspace_manager(workspace_id));
+drop policy if exists assignments_update on public.assignments;
+create policy assignments_update on public.assignments for update to authenticated
+  using (public.workspace_manager(workspace_id) or (public.workspace_role(workspace_id) = 'member' and assignee_id = auth.uid()))
+  with check (public.workspace_manager(workspace_id) or (public.workspace_role(workspace_id) = 'member' and assignee_id = auth.uid()));
+drop policy if exists assignments_delete on public.assignments;
+create policy assignments_delete on public.assignments for delete to authenticated
+  using (public.workspace_manager(workspace_id));
+
+drop policy if exists assignment_fees_manage on public.assignment_fees;
+create policy assignment_fees_manage on public.assignment_fees for all to authenticated
+  using (public.workspace_manager(workspace_id)) with check (public.workspace_manager(workspace_id));
+drop policy if exists assignment_payments_manage on public.assignment_payments;
+create policy assignment_payments_manage on public.assignment_payments for all to authenticated
+  using (public.workspace_manager(workspace_id)) with check (public.workspace_manager(workspace_id));

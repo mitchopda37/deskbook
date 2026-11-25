@@ -20,7 +20,7 @@ const id = (p: string) => `${p}-${++n}`
 
 const store = {
   workspaces: [
-    { id: W1, name: 'Tidewater Studio', slug: 'tidewater', currency: 'USD', brand_name: 'Tidewater Studio', accent_color: '#3159c9', logo_url: '', owner_id: DEMO_USER, created_at: stamp, fx_rates: { EUR: 1.08, GBP: 1.27 } },
+    { id: W1, name: 'Tidewater Studio', slug: 'tidewater', currency: 'USD', brand_name: 'Tidewater Studio', accent_color: '#3159c9', logo_url: '', owner_id: DEMO_USER, created_at: stamp, fx_rates: { EUR: 1.08, GBP: 1.27, AUD: 0.66 } },
     { id: W2, name: 'Alder & Finch', slug: 'alder-finch', currency: 'GBP', brand_name: 'Alder & Finch', accent_color: '#8b593d', logo_url: '', owner_id: DEMO_USER, created_at: stamp, fx_rates: {} },
   ],
   workspace_members: [
@@ -101,7 +101,39 @@ const store = {
     { id: 'a-2', name: 'Activate won clients', trigger_table: 'clients', trigger_field: 'pipeline_stage', trigger_value: 'won', action_field: 'status', action_value: 'active', enabled: true, runs: 3, created_at: stamp },
   ],
   invitations: [],
+  assignments: [],
+  assignment_fees: [],
+  assignment_payments: [],
 } as unknown as Data
+
+// Student assignments, mostly for Australian universities, priced in AUD.
+const at = (days: number, hour: number) => {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, hour, 0, 0)
+  return d.toISOString()
+}
+;([
+  // title, student, contact, institution, subject, words, status, writer, deadline (days, hour), delivered (days, hour) | null, price, currency, advance asked, [advance paid, balance paid]
+  ['Marketing plan for a coffee start-up', 'Liam Nguyen', 'liam.n@student.unimelb.edu.au', 'University of Melbourne', 'MKTG20001', 2500, 'in_progress', 'u-maya', [1, 17], null, 420, 'AUD', 210, [210, 0]],
+  ['Reflective essay on clinical placement', 'Chloe Wilson', '+61 412 555 019', 'Monash University', 'NUR2101', 1500, 'review', 'u-sara', [0, 23], null, 260, 'AUD', 130, [130, 0]],
+  ['Financial ratio analysis report', 'Arjun Mehta', 'arjun.m@uts.edu.au', 'UTS', 'Accounting 22320', 3000, 'new', null, [4, 12], null, 540, 'AUD', 270, [0, 0]],
+  ['Python data cleaning notebook', 'Sophie Taylor', 'sophie.t@student.uq.edu.au', 'University of Queensland', 'DATA7201', null, 'in_progress', 'u-dev', [-1, 18], null, 380, 'AUD', 190, [190, 0]],
+  ['Literature review: renewable policy', 'Jack Brown', 'jack.b@anu.edu.au', 'ANU', 'ENVS2015', 4000, 'delivered', 'u-maya', [-3, 17], [-4, 20], 640, 'AUD', 320, [320, 320]],
+  ['Case study: supply chain risk', 'Mia Chen', '+61 433 555 870', 'RMIT', 'BUSM4185', 2000, 'delivered', 'u-sara', [-6, 12], [-5, 15], 350, 'AUD', 175, [175, 0]],
+  ['Lab report: enzyme kinetics', 'Ethan Clarke', 'ethan.c@sydney.edu.au', 'University of Sydney', 'BCHM2072', 1800, 'delivered', 'u-dev', [-12, 9], [-13, 18], 300, 'AUD', 150, [150, 150]],
+  ['HR policy essay', 'Olivia Smith', 'olivia.s@gmail.com', 'University of Leeds', 'HRM 2201', 2200, 'cancelled', null, [-2, 17], null, 180, 'GBP', 90, [0, 0]],
+  ['Statistics assignment (SPSS)', 'Liam Nguyen', 'liam.n@student.unimelb.edu.au', 'University of Melbourne', 'MAST10010', null, 'delivered', 'u-dev', [-20, 17], [-21, 11], 280, 'AUD', 140, [140, 140]],
+] as const).forEach(([title, student_name, student_contact, institution, subject, word_count, status, assignee_id, [dd, dh], delivered, amount, currency, advance_due, [adv, bal]]) => {
+  const aid = id('as')
+  const deadline = at(dd, dh)
+  store.assignments.push({
+    id: aid, workspace_id: W1, title, student_name, student_contact, institution, subject, word_count, details: '',
+    status, assignee_id, deadline, delivered_at: delivered ? at(delivered[0], delivered[1]) : null,
+    created_by: DEMO_USER, created_at: at(dd - 9, 10),
+  })
+  store.assignment_fees.push({ assignment_id: aid, workspace_id: W1, amount, currency, advance_due })
+  if (adv > 0) store.assignment_payments.push({ id: id('ap'), workspace_id: W1, assignment_id: aid, amount: adv, kind: 'advance', paid_on: at(dd - 8, 10).slice(0, 10), method: 'Bank transfer', note: '', created_at: stamp })
+  if (bal > 0) store.assignment_payments.push({ id: id('ap'), workspace_id: W1, assignment_id: aid, amount: bal, kind: 'balance', paid_on: at(delivered ? delivered[0] : dd, 12).slice(0, 10), method: 'PayPal', note: '', created_at: stamp })
+})
 
 // Every business record belongs to one isolated workspace.
 for (const table of ['clients', 'retainers', 'tasks', 'invoices', 'payments', 'followups', 'automations', 'invitations'] as const) {
@@ -149,5 +181,9 @@ export const demoBackend: Backend = {
     const i = list.findIndex((r) => r[pk] === key)
     if (i >= 0) list.splice(i, 1)
     if (table === 'invoices') store.payments = store.payments.filter((p) => p.invoice_id !== key)
+    if (table === 'assignments') {
+      store.assignment_fees = store.assignment_fees.filter((f) => f.assignment_id !== key)
+      store.assignment_payments = store.assignment_payments.filter((p) => p.assignment_id !== key)
+    }
   },
 }

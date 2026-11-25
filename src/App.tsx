@@ -20,6 +20,9 @@ const pages = {
   Settings: () => import('./pages/Settings'),
   Automations: () => import('./pages/Automations'),
   Workspaces: () => import('./pages/Workspaces'),
+  Assignments: () => import('./pages/Assignments'),
+  AssignmentReport: () => import('./pages/AssignmentReport'),
+  Calculator: () => import('./pages/Calculator'),
 }
 const Today = lazy(pages.Today)
 const Work = lazy(pages.Work)
@@ -32,6 +35,9 @@ const Team = lazy(pages.Team)
 const Settings = lazy(pages.Settings)
 const Automations = lazy(pages.Automations)
 const Workspaces = lazy(pages.Workspaces)
+const Assignments = lazy(pages.Assignments)
+const AssignmentReport = lazy(pages.AssignmentReport)
+const Calculator = lazy(pages.Calculator)
 
 function usePreloadPages() {
   useEffect(() => {
@@ -105,6 +111,9 @@ export default function App() {
           <Route path="/clients" element={<Clients />} />
           <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/follow-ups" element={<Followups />} />
+          <Route path="/assignments" element={<Assignments />} />
+          {data.isOwner && <Route path="/assignments/report" element={<AssignmentReport />} />}
+          {data.isOwner && <Route path="/calculator" element={<Calculator />} />}
           <Route path="/settings" element={<Settings />} />
           {data.isOwner && <Route path="/money" element={<Money />} />}
           {data.isOwner && <Route path="/reports" element={<Reports />} />}

@@ -49,9 +49,25 @@ export interface Invitation {
   role: 'owner' | 'member'; invited_by: string | null; expires_at: string; created_at: string
 }
 
+export type AssignmentStatus = 'new' | 'in_progress' | 'review' | 'delivered' | 'cancelled'
+export interface Assignment {
+  id: string; workspace_id: string; title: string; student_name: string; student_contact: string; institution: string
+  subject: string; word_count: number | null; details: string; status: AssignmentStatus; assignee_id: string | null
+  /** ISO timestamp: assignments are due at a time of day, not just a date. */
+  deadline: string; delivered_at: string | null; created_by: string | null; created_at: string
+}
+/** The agreed price. Only admins and sub admins can read it. */
+export interface AssignmentFee { assignment_id: string; workspace_id: string; amount: number; currency: string; advance_due: number }
+export type AssignmentPaymentKind = 'advance' | 'balance'
+export interface AssignmentPayment {
+  id: string; workspace_id: string; assignment_id: string; amount: number; kind: AssignmentPaymentKind
+  paid_on: string; method: string; note: string; created_at: string
+}
+
 export interface Data {
   profiles: Profile[]; workspaces: Workspace[]; workspace_members: WorkspaceMember[]; clients: Client[]; retainers: Retainer[]
   tasks: Task[]; invoices: Invoice[]; payments: Payment[]; followups: Followup[]; automations: Automation[]; invitations: Invitation[]
+  assignments: Assignment[]; assignment_fees: AssignmentFee[]; assignment_payments: AssignmentPayment[]
 }
 export type Table = keyof Data
 
@@ -69,8 +85,40 @@ export interface Bill extends Invoice {
   native: { amount: number; paid: number; remaining: number }
 }
 
+/**
+ * An assignment with its money and timing worked out. Money in `native` is in the fee's currency;
+ * `base` is the same converted to the workspace currency so it can be added up.
+ */
+export interface AssignmentView extends Assignment {
+  priced: boolean
+  currency: string
+  native: { amount: number; paid: number; remaining: number; advanceDue: number; advancePaid: number; balancePaid: number }
+  base: { amount: number; paid: number; remaining: number }
+  payState: PayState
+  /** Asked-for advance not fully received yet. */
+  advanceShort: boolean
+  payments: (AssignmentPayment & { currency: string; base_amount: number })[]
+  /** Still being worked on: not delivered or cancelled. */
+  open: boolean
+  /** Open and past its deadline. */
+  late: boolean
+  /** Hours until the deadline; negative when past. */
+  hoursLeft: number
+  /** Delivered by the deadline (null when not delivered). */
+  onTime: boolean | null
+}
+
+export const ASSIGNMENT_STATUSES: { id: AssignmentStatus; label: string }[] = [
+  { id: 'new', label: 'New' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'review', label: 'In review' },
+  { id: 'delivered', label: 'Delivered' },
+  { id: 'cancelled', label: 'Cancelled' },
+]
+
+/** Most-used first, so the common ones (including AUD) are at the top of every list. */
 export const CURRENCIES = [
-  'USD', 'EUR', 'GBP', 'INR', 'AED', 'SAR', 'QAR', 'KWD', 'ILS', 'AUD', 'CAD', 'NZD', 'SGD', 'HKD', 'CHF', 'SEK', 'NOK', 'DKK',
+  'USD', 'AUD', 'GBP', 'EUR', 'INR', 'CAD', 'NZD', 'AED', 'SAR', 'QAR', 'KWD', 'ILS', 'SGD', 'HKD', 'CHF', 'SEK', 'NOK', 'DKK',
   'PLN', 'TRY', 'JPY', 'CNY', 'KRW', 'MYR', 'THB', 'IDR', 'PHP', 'VND', 'PKR', 'BDT', 'LKR', 'NPR', 'NGN', 'KES', 'EGP', 'ZAR',
   'BRL', 'MXN', 'ARS', 'COP', 'CLP',
 ]
@@ -98,3 +146,12 @@ export const PIPELINE_STAGES: { id: PipelineStage; label: string }[] = [
   { id: 'active', label: 'Active delivery' }, { id: 'on_hold', label: 'On hold' },
   { id: 'lost', label: 'Lost' },
 ]
+
+const currencyNames = (() => {
+  try { return new Intl.DisplayNames(['en'], { type: 'currency' }) } catch { return null }
+})()
+/** "AUD · Australian Dollar", so currencies can be found by country, not just by code. */
+export const currencyLabel = (code: string) => {
+  const name = currencyNames?.of(code)
+  return name && name !== code ? `${code} · ${name}` : code
+}

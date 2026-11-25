@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AddressBook, BellSimpleRinging, Kanban, MagnifyingGlass, Plus, Receipt, type Icon } from '@phosphor-icons/react'
+import { AddressBook, BellSimpleRinging, GraduationCap, Kanban, MagnifyingGlass, Plus, Receipt, type Icon } from '@phosphor-icons/react'
 import { useData, useSheet } from '../lib/store'
 
 interface Hit { key: string; icon: Icon; title: string; sub: string; run(): void }
 
 /** Ctrl/Cmd+K: find a client, a piece of work or an invoice, or start something new. */
 export function Search({ onClose }: { onClose(): void }) {
-  const { clients, tasks, bills, followups, isOwner, clientName, moneyIn } = useData()
+  const { clients, tasks, bills, followups, assignments, isOwner, clientName, moneyIn } = useData()
   const { open } = useSheet()
   const go = useNavigate()
   const [q, setQ] = useState('')
@@ -25,6 +25,7 @@ export function Search({ onClose }: { onClose(): void }) {
       if (isOwner) starts.push(
         { key: 'n-inv', icon: Plus, title: 'New invoice', sub: 'Money a client owes you', run: () => open({ kind: 'invoice' }) },
         { key: 'n-client', icon: Plus, title: 'New client', sub: 'A new company or person', run: () => open({ kind: 'client' }) },
+        { key: 'n-assign', icon: Plus, title: 'New assignment', sub: 'Student work with a deadline', run: () => open({ kind: 'assignment' }) },
       )
       return starts
     }
@@ -35,10 +36,12 @@ export function Search({ onClose }: { onClose(): void }) {
       out.push({ key: t.id, icon: Kanban, title: t.title, sub: `Work for ${clientName(t.client_id)}`, run: () => open({ kind: 'task', id: t.id }) })
     for (const b of bills) if (has(b.title, clientName(b.client_id), String(b.native.amount), b.currency))
       out.push({ key: b.id, icon: Receipt, title: `${clientName(b.client_id)}: ${b.title}`, sub: b.remaining > 0 ? `${moneyIn(b.native.remaining, b.currency)} remaining` : `${moneyIn(b.native.amount, b.currency)}, paid`, run: () => open({ kind: 'invoice', id: b.id }) })
+    for (const a of assignments) if (has(a.title, a.student_name, a.student_contact, a.subject, a.institution))
+      out.push({ key: a.id, icon: GraduationCap, title: a.title, sub: `${a.student_name}${isOwner && a.priced ? `, ${a.native.remaining > 0 ? `${moneyIn(a.native.remaining, a.currency)} remaining` : 'paid'}` : ''}`, run: () => open({ kind: 'assignment', id: a.id }) })
     for (const f of followups) if (has(f.about, clientName(f.client_id)))
       out.push({ key: f.id, icon: BellSimpleRinging, title: f.about, sub: `Follow-up for ${clientName(f.client_id)}`, run: () => open({ kind: 'followup', id: f.id }) })
     return out.slice(0, 12)
-  }, [q, clients, tasks, bills, followups, isOwner, clientName, moneyIn, open, go])
+  }, [q, clients, tasks, bills, followups, assignments, isOwner, clientName, moneyIn, open, go])
 
   useEffect(() => setAt(0), [q])
   useEffect(() => { list.current?.children[at]?.scrollIntoView({ block: 'nearest' }) }, [at])

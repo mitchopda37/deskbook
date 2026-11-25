@@ -2,8 +2,9 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Trash } from '@phosphor-icons/react'
 import { useActions, useAuth, useData, useSheet, type Sheet } from '../lib/store'
 import { addDays, dayLabel, today } from '../lib/dates'
-import { BILLING_LABEL, CLIENT_SOURCES, CURRENCIES, PIPELINE_STAGES, TASK_STATUSES, type BillingType } from '../lib/types'
+import { BILLING_LABEL, CLIENT_SOURCES, CURRENCIES, currencyLabel, PIPELINE_STAGES, TASK_STATUSES, type BillingType } from '../lib/types'
 import { Drawer, Field, PayBar, PayTag } from './kit'
+import { AssignmentPaymentSheet, AssignmentSheet } from './AssignmentSheets'
 
 const METHODS = ['Bank transfer', 'UPI', 'Card', 'Cash', 'Cheque', 'PayPal', 'Other']
 
@@ -17,6 +18,8 @@ export function Sheets() {
     case 'invoice': return <InvoiceSheet key={key} sheet={sheet} />
     case 'payment': return <PaymentSheet key={key} sheet={sheet} />
     case 'followup': return <FollowupSheet key={key} sheet={sheet} />
+    case 'assignment': return <AssignmentSheet key={key} sheet={sheet} />
+    case 'assignmentPayment': return <AssignmentPaymentSheet key={key} sheet={sheet} />
   }
 }
 
@@ -135,7 +138,7 @@ function ClientSheet({ sheet }: { sheet: Extract<Sheet, { kind: 'client' }> }) {
       </div>
       <Field label="Billing currency" hint={billedBefore ? 'New invoices use this currency. Existing invoices keep theirs.' : f.currency === currency ? 'Same as the workspace.' : `Totals convert to ${currency} using the rate in Settings.`}>
         <select className="input" value={f.currency} onChange={set('currency')}>
-          {[currency, ...CURRENCIES.filter((c) => c !== currency)].map((c) => <option key={c} value={c}>{c}{c === currency ? ' (workspace)' : ''}</option>)}
+          {[currency, ...CURRENCIES.filter((c) => c !== currency)].map((c) => <option key={c} value={c}>{currencyLabel(c)}{c === currency ? ' (workspace)' : ''}</option>)}
         </select>
       </Field>
       {f.billing_type === 'retainer' && (
@@ -294,7 +297,7 @@ function InvoiceSheet({ sheet }: { sheet: Extract<Sheet, { kind: 'invoice' }> })
         </Field>
         <Field label="Currency" hint={currencyLocked ? 'Fixed after a payment.' : undefined}>
           <select className="input" value={f.currency} onChange={set('currency')} disabled={currencyLocked}>
-            {[currency, ...CURRENCIES.filter((c) => c !== currency)].map((c) => <option key={c} value={c}>{c}</option>)}
+            {[currency, ...CURRENCIES.filter((c) => c !== currency)].map((c) => <option key={c} value={c}>{currencyLabel(c)}</option>)}
           </select>
         </Field>
       </div>

@@ -6,6 +6,7 @@ import { thisMonth, useActions, useAuth, useData, useSheet } from '../lib/store'
 import { lastMonths, longToday, monthKey, monthLabel, today } from '../lib/dates'
 import type { Bill, Followup, Task } from '../lib/types'
 import { Avatar, Due, Empty, PageHead, RateNotice } from '../ui/kit'
+import { AssignmentRow } from './Assignments'
 
 export default function Today() {
   const d = useData()
@@ -19,10 +20,13 @@ export default function Today() {
     .filter((x) => !x.done && x.due_on <= t)
     .sort((a, b) => a.due_on.localeCompare(b.due_on))
   const lateBills = d.bills.filter((b) => b.overdue)
+  // Assignments past their deadline or due within two days.
+  const assignmentsDue = d.assignments.filter((a) => a.open && a.hoursLeft <= 48).sort((a, b) => a.deadline.localeCompare(b.deadline))
 
   const parts = [
     `${work.length} ${work.length === 1 ? 'piece' : 'pieces'} of work due`,
     `${follow.length} ${follow.length === 1 ? 'follow-up' : 'follow-ups'}`,
+    ...(assignmentsDue.length ? [`${assignmentsDue.length} ${assignmentsDue.length === 1 ? 'assignment' : 'assignments'} due within 2 days`] : []),
     ...(d.isOwner ? [`${lateBills.length} overdue ${lateBills.length === 1 ? 'payment' : 'payments'}`] : []),
   ]
   const first = (d.me?.full_name || '').split(' ')[0]
@@ -32,6 +36,13 @@ export default function Today() {
       <PageHead title={longToday()} sub={`${first ? `${first}, you have ` : ''}${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}.`} />
 
       {d.isOwner && <MoneyBoard />}
+
+      {assignmentsDue.length > 0 && (
+        <section className="mt-8">
+          <SectionHead title="Assignment deadlines" to="/assignments" link="All assignments" />
+          <ul className="panel divide-y divide-line">{assignmentsDue.slice(0, 6).map((a) => <AssignmentRow key={a.id} a={a} />)}</ul>
+        </section>
+      )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.25fr_1fr]">
         <section className="min-w-0">

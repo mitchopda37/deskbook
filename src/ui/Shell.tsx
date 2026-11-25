@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  AddressBook, BellSimpleRinging, Buildings, CaretUpDown, ChartBar, DotsThreeOutline, GearSix, Kanban, Lightning, MagnifyingGlass, Moon, Plus,
+  AddressBook, BellSimpleRinging, Buildings, Calculator, CaretUpDown, ChartBar, ChartLineUp, GraduationCap, DotsThreeOutline, GearSix, Kanban, Lightning, MagnifyingGlass, Moon, Plus,
   SidebarSimple, SignOut, Sun, SunHorizon, UsersThree, Wallet, X, type Icon,
 } from '@phosphor-icons/react'
 import { useAuth, useData, useSheet, type Sheet } from '../lib/store'
@@ -41,7 +41,7 @@ function useDismiss(ref: RefObject<HTMLElement | null>, shown: boolean, hide: ()
 interface NavItem { to: string; label: string; icon: Icon; count?: number; alert?: boolean }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { me, isOwner, isPlatformOwner, tasks, followups, bills, workspaceName, activeWorkspace, workspaces, switchWorkspace } = useData()
+  const { me, isOwner, isPlatformOwner, tasks, followups, bills, assignments, workspaceName, activeWorkspace, workspaces, switchWorkspace } = useData()
   const { userId, signOut } = useAuth()
   const { theme, toggle } = useTheme()
   const { pathname } = useLocation()
@@ -64,6 +64,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const myDue = tasks.filter((x) => x.status !== 'done' && x.assignee_id === userId && x.due_on && x.due_on <= t).length
   const followDue = followups.filter((x) => !x.done && x.due_on <= t).length
   const late = bills.filter((b) => b.overdue).length
+  // Assignments past their deadline (red) or due within a day (gold).
+  const assignmentsLate = assignments.filter((a) => a.late).length
+  const assignmentsSoon = assignments.filter((a) => a.open && !a.late && a.hoursLeft <= 24).length
 
   const groups: { label?: string; items: NavItem[] }[] = [
     { items: [
@@ -71,6 +74,13 @@ export function Shell({ children }: { children: ReactNode }) {
       { to: '/work', label: 'Work', icon: Kanban, count: myDue },
       { to: '/clients', label: 'Clients', icon: AddressBook },
       { to: '/follow-ups', label: 'Follow-ups', icon: BellSimpleRinging, count: followDue },
+    ] },
+    { label: 'Assignments', items: [
+      { to: '/assignments', label: 'Assignments', icon: GraduationCap, count: assignmentsLate || assignmentsSoon, alert: assignmentsLate > 0 },
+      ...(isOwner ? [
+        { to: '/calculator', label: 'Calculator', icon: Calculator },
+        { to: '/assignments/report', label: 'Assignment report', icon: ChartLineUp },
+      ] : []),
     ] },
     ...(isOwner ? [{ label: 'Money', items: [
       { to: '/money', label: 'Invoices', icon: Wallet, count: late, alert: true },
@@ -127,7 +137,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 : <p className="mb-1 px-3 text-[0.8rem] font-medium text-rail-mute">{g.label}</p>)}
               <div className="space-y-0.5">
                 {g.items.map((n) => (
-                  <NavLink key={n.to} to={n.to} end={n.to === '/'} title={slim ? n.label : undefined}
+                  <NavLink key={n.to} to={n.to} end={n.to === '/' || n.to === '/assignments'} title={slim ? n.label : undefined}
                     className={({ isActive }) =>
                       `relative flex h-9.5 items-center rounded-[0.55rem] font-medium transition-colors duration-150 ${slim ? 'justify-center' : 'gap-3 px-3'} ${
                         isActive ? 'bg-white/12 text-white' : 'hover:bg-white/6 hover:text-white'
@@ -174,7 +184,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <nav aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden print:hidden">
         {tabs.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'}
+          <NavLink key={n.to} to={n.to} end={n.to === '/' || n.to === '/assignments'}
             className={({ isActive }) => `relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.72rem] font-semibold transition-colors duration-150 ${isActive ? 'text-ink' : 'text-mute'}`}>
             {({ isActive }) => (
               <>
@@ -214,7 +224,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
             <div className="border-t border-line pt-1.5">
               {rest.map((n) => (
-                <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex h-12 items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold transition-colors duration-150 ${isActive ? 'bg-sunk' : ''}`}>
+                <NavLink key={n.to} to={n.to} end={n.to === '/assignments'} className={({ isActive }) => `flex h-12 items-center gap-3.5 rounded-[0.6rem] px-3 font-semibold transition-colors duration-150 ${isActive ? 'bg-sunk' : ''}`}>
                   <n.icon size={22} /><span className="flex-1">{n.label}</span>
                   {!!n.count && <span className="min-w-5 rounded-full bg-gold px-1.5 text-center text-[0.8rem] leading-5 text-gold-ink">{n.count}</span>}
                 </NavLink>
@@ -301,6 +311,7 @@ function NewMenu({ isOwner, variant }: { isOwner: boolean; variant: 'rail' | 'ra
     { label: 'Follow-up', hint: 'A reminder to call or write', sheet: { kind: 'followup' } },
     { label: 'Invoice', hint: 'Money a client owes you', sheet: { kind: 'invoice' }, owner: true },
     { label: 'Client', hint: 'A new company or person', sheet: { kind: 'client' }, owner: true },
+    { label: 'Assignment', hint: 'Student work with a deadline', sheet: { kind: 'assignment' }, owner: true },
   ]
   const trigger = {
     rail: 'flex h-9 w-full items-center gap-2.5 rounded-[0.55rem] bg-white px-2.5 text-[0.93rem] font-semibold text-[#0e1736] hover:bg-white/90',

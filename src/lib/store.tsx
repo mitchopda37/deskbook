@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { arrivedFromInvite, backend, createInvitedAccount, isDemo, supabase } from './backend'
 import { DEMO_USER } from './demo'
 import { daysBetween, monthKey, today } from './dates'
-import type { Bill, Client, Data, Invoice, Payment, Profile, Received, Table } from './types'
+import type { Assignment, AssignmentFee, AssignmentPayment, AssignmentView, Bill, Client, Data, Invoice, Payment, Profile, Received, Table } from './types'
 
 // ------------------------------------------------------------------ auth
 
@@ -167,9 +167,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 // ------------------------------------------------------------------ data
 
-const TABLES: Table[] = ['profiles', 'workspaces', 'workspace_members', 'clients', 'retainers', 'tasks', 'invoices', 'payments', 'followups', 'automations', 'invitations']
-const EMPTY: Data = { profiles: [], workspaces: [], workspace_members: [], clients: [], retainers: [], tasks: [], invoices: [], payments: [], followups: [], automations: [], invitations: [] }
-const SCOPED_TABLES = new Set<Table>(['clients', 'retainers', 'tasks', 'invoices', 'payments', 'followups', 'automations', 'invitations'])
+const TABLES: Table[] = ['profiles', 'workspaces', 'workspace_members', 'clients', 'retainers', 'tasks', 'invoices', 'payments', 'followups', 'automations', 'invitations', 'assignments', 'assignment_fees', 'assignment_payments']
+const EMPTY: Data = { profiles: [], workspaces: [], workspace_members: [], clients: [], retainers: [], tasks: [], invoices: [], payments: [], followups: [], automations: [], invitations: [], assignments: [], assignment_fees: [], assignment_payments: [] }
+const SCOPED_TABLES = new Set<Table>(['clients', 'retainers', 'tasks', 'invoices', 'payments', 'followups', 'automations', 'invitations', 'assignments', 'assignment_fees', 'assignment_payments'])
 
 let activeWorkspaceId = localStorage.getItem('deskbook-workspace') ?? ''
 const workspaceListeners = new Set<() => void>()
@@ -216,6 +216,47 @@ export function toBills(
     }
   })
   return { bills, received }
+}
+
+/**
+ * Works out price, advance, paid and remaining for every assignment (in the fee's own currency),
+ * plus deadline status. `toBase` converts the money so totals across currencies add up.
+ */
+export function toAssignments(
+  assignments: Assignment[], fees: AssignmentFee[], payments: AssignmentPayment[],
+  baseCurrency = 'USD', toBase: (n: number, currency: string) => number = (n) => n, now = Date.now(),
+): AssignmentView[] {
+  const feeOf = new Map(fees.map((f) => [f.assignment_id, f]))
+  const paysOf = new Map<string, AssignmentPayment[]>()
+  for (const p of payments) paysOf.set(p.assignment_id, [...(paysOf.get(p.assignment_id) ?? []), p])
+  return assignments.map((a): AssignmentView => {
+    const fee = feeOf.get(a.id)
+    const currency = fee?.currency || baseCurrency
+    const list = [...(paysOf.get(a.id) ?? [])].sort((x, y) => x.paid_on.localeCompare(y.paid_on))
+    const sum = (rows: AssignmentPayment[]) => round2(rows.reduce((s, p) => s + p.amount, 0))
+    const amount = fee?.amount ?? 0
+    const paid = Math.min(amount || Infinity, sum(list))
+    const remaining = Math.max(0, round2(amount - paid))
+    const advanceDue = fee?.advance_due ?? 0
+    const advancePaid = sum(list.filter((p) => p.kind === 'advance'))
+    const deadlineMs = Date.parse(a.deadline)
+    const open = a.status !== 'delivered' && a.status !== 'cancelled'
+    const hoursLeft = (deadlineMs - now) / 3_600_000
+    return {
+      ...a,
+      priced: !!fee,
+      currency,
+      native: { amount, paid, remaining, advanceDue, advancePaid, balancePaid: sum(list.filter((p) => p.kind === 'balance')) },
+      base: { amount: round2(toBase(amount, currency)), paid: round2(toBase(paid, currency)), remaining: round2(toBase(remaining, currency)) },
+      payState: !fee ? 'unpaid' : remaining <= 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
+      advanceShort: !!fee && a.status !== 'cancelled' && advanceDue > 0 && advancePaid < advanceDue,
+      payments: list.map((p) => ({ ...p, currency, base_amount: round2(toBase(p.amount, currency)) })),
+      open,
+      late: open && hoursLeft < 0,
+      hoursLeft,
+      onTime: a.status === 'delivered' && a.delivered_at ? Date.parse(a.delivered_at) <= deadlineMs : null,
+    }
+  })
 }
 
 const formatters = new Map<string, Intl.NumberFormat>()
@@ -278,7 +319,9 @@ export function useData() {
     const toBase = (n: number, cur: string) => n * (rateFor(cur || currency) ?? 1)
     const currencyOfClient = (id: string) => clientById.get(id)?.currency || currency
     const { bills, received } = toBills(invoices, payments, currency, toBase)
-    const currenciesInUse = [...new Set([currency, ...clients.map((c) => c.currency || currency), ...bills.map((b) => b.currency)])]
+    const assignmentFees = inWorkspace(data.assignment_fees)
+    const assignments = toAssignments(inWorkspace(data.assignments), assignmentFees, inWorkspace(data.assignment_payments), currency, toBase)
+    const currenciesInUse = [...new Set([currency, ...clients.map((c) => c.currency || currency), ...bills.map((b) => b.currency), ...assignmentFees.map((f) => f.currency)])]
     const missingRates = currenciesInUse.filter((cur) => rateFor(cur) === null)
     /** Monthly retainer amounts converted to the workspace currency. */
     const retainerBase = (r: { client_id: string; amount: number }) => round2(toBase(r.amount, currencyOfClient(r.client_id)))
@@ -297,7 +340,7 @@ export function useData() {
       clients, retainers, tasks, invoices, followups, automations, invitations,
       /** Payments with `amount` in the workspace currency (`native_amount` + `currency` keep the original). */
       payments: received,
-      bills, me, team, clientById, profileById, money, moneyIn, switchWorkspace,
+      bills, assignments, me, team, clientById, profileById, money, moneyIn, switchWorkspace,
       fxRates, rateFor, toBase, currencyOfClient, currenciesInUse, missingRates, retainerBase,
       workspaceName: activeWorkspace?.brand_name || activeWorkspace?.name || 'Deskbook',
       currency,
@@ -405,6 +448,8 @@ export type Sheet =
   | { kind: 'invoice'; id?: string; clientId?: string }
   | { kind: 'payment'; invoiceId: string }
   | { kind: 'followup'; id?: string; clientId?: string; invoiceId?: string; about?: string }
+  | { kind: 'assignment'; id?: string; prefill?: { amount: number; currency: string; advance: number; words?: number } }
+  | { kind: 'assignmentPayment'; assignmentId: string }
 
 const SheetCtx = createContext<{ sheet: Sheet | null; leaving: boolean; open(s: Sheet): void; close(): void }>(null!)
 export const useSheet = () => useContext(SheetCtx)
